@@ -17,7 +17,8 @@ param.Ts = 0.05;
 % Load model parameters (NOTE! These are not precise as they are later
 % perturbed)
 load('Crane_NominalParameters.mat');
-[param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
+% ASSUMES Vx = Vy
+[param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,param.Ts);
 
 
 % This is a sample static K matrix for the controller

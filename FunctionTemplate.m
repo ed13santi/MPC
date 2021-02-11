@@ -17,7 +17,8 @@ param.Ts = 0.05;
 % Load model parameters (NOTE! These are not precise as they are later
 % perturbed)
 load('Crane_NominalParameters.mat');
-[param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
+% ASSUMES Vx = Vy
+[param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,param.Ts);
 
 
 % This is a sample static K matrix for the controller
@@ -136,7 +137,7 @@ end % End of myMPController
 
 %% OTHER FUNCTIONS
 
-function [A,B,C,D] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vx,Vy,Ts)
+function [A,B,C,D] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts)
 % Inputs:
 % m = Pendulum mass (kg)
 % M = Cart mass (kg)
@@ -151,8 +152,8 @@ function [A,B,C,D] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vx,Vy,Ts)
 % A,B,C,D = State Space matrices of a discrete-time or continuous-time state space model
 
 % The motors in use on the gantry crane are identical and therefore Vx=Vy.
-%Vx=Vm;
-%Vy=Vm;
+Vx=Vm;
+Vy=Vm;
 
 % replace A,B,C,D with the correct values
 A=[ 0, 1,             0, 0,        0,                          0, 0,              0;
