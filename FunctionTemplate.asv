@@ -81,13 +81,13 @@ u = zeros(2,1);
 %%
 
 %horizon length
-N = 15;
+N = 5;
 
 %u = param.K*(r - x_hat);
 
 % Declare penalty matrices:
-Q = 1*diag(1:8);
-P = 100000*diag(3:10);
+Q = diag(1:8);
+P = diag(3:10);
 R = diag([2;3]);
 
 A = param.A;
@@ -188,9 +188,10 @@ end
 
 function [a,c] = lineParams(pointA, pointB)
     % given two points, returns the parameters of the line ax+y=c
+    
     dy = pointB(2)-pointA(2);
     dx = pointB(1)-pointA(1);
-    a = - dy/dx; % y + a * x = c
+    a = - dy/dx; % y = grad * x + c
     c = pointA(2) + a * pointA(1);
 end
 
@@ -207,8 +208,8 @@ function [mat, ch, cl] = rectConstraints(rect)
     mat  = [ a1 , 1;
              a2 , 1 ];% CHECK THIS MIGHT BE WRONG!!!
          
-    ch = [ c3; c2 ];
-    cl = [ c1; c4 ];
+    ch = [ c3; c4 ];
+    cl = [ c1; c2 ];
 end
 
 
