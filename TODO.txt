@@ -1,0 +1,7 @@
+Try to implement model that accounts for friction
+
+Look into different sovlers
+
+Try to implement the work conatraints
+
+Fix the rectangular constraints thing (need to change it so that the orer doesnt matter and also so should write line as ax+by =c so that horizontal/vertical lines dont mess it up)

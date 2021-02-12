@@ -29,7 +29,6 @@ rightIneqConstr = bb + J*x + L*xTarget;
 %CEHCK IA CONTRAINT THING
 %% your remaining code here
 u = U(1:m);
-u = [0;0];
 end
 
 

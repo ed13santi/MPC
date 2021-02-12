@@ -14,22 +14,14 @@ param.Tf = shape.Tf;
 % This is how to set the sampling interval
 param.Ts = 0.05;
 
-% Load model parameters (NOTE! These are not precise as they are later
-% perturbed)
-load('Crane_NominalParameters.mat');
-[param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
-
-
-% This is a sample static K matrix for the controller
-%param.K = [2, 0, 0, 0, 0, 0, 0, 0;
-%           0, 0, 2, 0, 0, 0, 0, 0];
-
 % This is a sample way to send reference points
 param.xTar = shape.target(1);
 param.yTar = shape.target(2);
 
 
-
+% Load model parameters and calculate matrices
+load('Crane_NominalParameters.mat');
+[param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
 
 end % End of mySetup
 
@@ -78,33 +70,42 @@ function u = myMPController(r, x_hat, param)
 %% Do not delete this line
 % Create the output array of the appropriate size
 u = zeros(2,1);
-%%
+%
+
+%convert state to MPC's format
+x_MPC = x_hat(1:8);
 
 %horizon length
-N = 5;
+N = 15;
 
-%u = param.K*(r - x_hat);
-
-% Declare penalty matrices:
-Q = diag(1:8);
-P = diag(3:10);
-R = diag([2;3]);
+%Declare penalty matrices:      
+%if abs(x_MPC - r) < param.tolerances.state(1:8)
+%    P = diag([1,1,1,1,1,1,1,1])
+%    Q = diag([1,1,1,1,1,1,1,1])
+%else
+P = 100 * diag(ones(8,1));
+Q = 100 * diag(ones(8,1));
+%end
+       
+R = diag([1;1]);
 
 A = param.A;
 B = param.B;
 C = param.C;
 
-% Constraints %SHOULD THE TARGET BE SPECIFIED AS A CONSTRAINT?
+% Constraints 
 [DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
 D = zeros(2, size(param.A,1));
 D(1,1) = DRect(1,1);
 D(2,1) = DRect(2,1);
 D(1,3) = DRect(1,2);
 D(2,3) = DRect(2,2);
+%D(3,5) = 1; %limit on Theta
+%D(4,7) = 1; %limit on Phi
 
 % Compute stage constraint matrices and vector
-cl = clRect;
-ch = chRect;
+cl = [clRect];%; -0.1*pi; -0.1*pi];
+ch = [chRect];%; 0.1*pi; 0.1*pi];
 ul = [-1; -1];
 uh = [1; 1];
 [Dt,Et,bt] = genStageConstraints(A,B,D,cl,ch,ul,uh);
@@ -124,7 +125,7 @@ uh = [1; 1];
 Linv = linsolve(Lchol,eye(size(Lchol)),struct('LT',true));
 
 % Run a linear simulation to test your genMPController function
-u = genMPController(Linv,G,F,bb,J,L,x_hat,r,2);
+u = genMPController(Linv,G,F,bb,J,L,x_MPC,r,2);
 
 end % End of myMPController
 
@@ -151,8 +152,6 @@ function [A,B,C,D] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vx,Vy,Ts)
 % A,B,C,D = State Space matrices of a discrete-time or continuous-time state space model
 
 % The motors in use on the gantry crane are identical and therefore Vx=Vy.
-%Vx=Vm;
-%Vy=Vm;
 
 % replace A,B,C,D with the correct values
 A=[ 0, 1,             0, 0,        0,                          0, 0,              0;
@@ -187,11 +186,12 @@ end
 end
 
 function [a,c] = lineParams(pointA, pointB)
-    % given two points, returns the parameters of the line ax+y=c
-    
+    % given two points, returns the parameters of the line 
+    % ax+(a-1)y=c
     dy = pointB(2)-pointA(2);
     dx = pointB(1)-pointA(1);
-    a = - dy/dx; % y = grad * x + c
+    m = dy/dx; % y + a * x = c
+    
     c = pointA(2) + a * pointA(1);
 end
 
@@ -208,8 +208,8 @@ function [mat, ch, cl] = rectConstraints(rect)
     mat  = [ a1 , 1;
              a2 , 1 ];% CHECK THIS MIGHT BE WRONG!!!
          
-    ch = [ c3; c4 ];
-    cl = [ c1; c2 ];
+    ch = [ c3; c2 ];
+    cl = [ c1; c4 ];
 end
 
 

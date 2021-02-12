@@ -8,11 +8,11 @@ function [mat, ch, cl] = rectConstraints(rect)
     [a3,c3] = lineParams(B,C);
     [a4,c4] = lineParams(D,C);
     
-    mat  = [ a1 , 1;
-             a2 , 1 ];% CHECK THIS MIGHT BE WRONG!!!
+    mat  = [ a1 , 1-a1;
+             a2 , 1-a2 ];% CHECK THIS MIGHT BE WRONG!!!
          
-    ch = [ c3; c2 ];
-    cl = [ c1; c4 ];
+    ch = [ max(c1,c3); max(c2,c4) ];
+    cl = [ min(c1,c3); min(c2,c4) ];
 end
 
 

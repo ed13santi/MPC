@@ -61,6 +61,9 @@ craneParams.Vl = testCourse.perturb.Vl * Vl;
 craneParams.Vx = testCourse.perturb.Vx * Vx;
 craneParams.Vy = testCourse.perturb.Vy * Vy;
 
+%craneParams.Vy = craneParams.Vx
+%craneParams.Tx = 0
+%craneParams.Ty = 0
 
 %% Extract the student functions
 extractFunctions( ['FunctionTemplate.m'], 1 );

@@ -14,23 +14,14 @@ param.Tf = shape.Tf;
 % This is how to set the sampling interval
 param.Ts = 0.05;
 
-% Load model parameters (NOTE! These are not precise as they are later
-% perturbed)
-load('Crane_NominalParameters.mat');
-% ASSUMES Vx = Vy
-[param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,param.Ts);
-
-
-% This is a sample static K matrix for the controller
-%param.K = [2, 0, 0, 0, 0, 0, 0, 0;
-%           0, 0, 2, 0, 0, 0, 0, 0];
-
 % This is a sample way to send reference points
 param.xTar = shape.target(1);
 param.yTar = shape.target(2);
 
 
-
+% Load model parameters and calculate matrices
+load('Crane_NominalParameters.mat');
+[param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
 
 end % End of mySetup
 

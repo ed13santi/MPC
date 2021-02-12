@@ -3,33 +3,42 @@ function u = myMPController(r, x_hat, param)
 %% Do not delete this line
 % Create the output array of the appropriate size
 u = zeros(2,1);
-%%
+%
+
+%convert state to MPC's format
+x_MPC = x_hat(1:8);
 
 %horizon length
 N = 15;
 
-%u = param.K*(r - x_hat);
-
-% Declare penalty matrices:
-Q = 1*diag(1:8);
-P = 100000*diag(3:10);
-R = diag([2;3]);
+%Declare penalty matrices:      
+%if abs(x_MPC - r) < param.tolerances.state(1:8)
+%    P = diag([1,1,1,1,1,1,1,1])
+%    Q = diag([1,1,1,1,1,1,1,1])
+%else
+P = 100 * diag(ones(8,1));
+Q = 100 * diag(ones(8,1));
+%end
+       
+R = diag([1;1]);
 
 A = param.A;
 B = param.B;
 C = param.C;
 
-% Constraints %SHOULD THE TARGET BE SPECIFIED AS A CONSTRAINT?
+% Constraints 
 [DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
 D = zeros(2, size(param.A,1));
 D(1,1) = DRect(1,1);
 D(2,1) = DRect(2,1);
 D(1,3) = DRect(1,2);
 D(2,3) = DRect(2,2);
+%D(3,5) = 1; %limit on Theta
+%D(4,7) = 1; %limit on Phi
 
 % Compute stage constraint matrices and vector
-cl = clRect;
-ch = chRect;
+cl = [clRect];%; -0.1*pi; -0.1*pi];
+ch = [chRect];%; 0.1*pi; 0.1*pi];
 ul = [-1; -1];
 uh = [1; 1];
 [Dt,Et,bt] = genStageConstraints(A,B,D,cl,ch,ul,uh);
@@ -49,7 +58,7 @@ uh = [1; 1];
 Linv = linsolve(Lchol,eye(size(Lchol)),struct('LT',true));
 
 % Run a linear simulation to test your genMPController function
-u = genMPController(Linv,G,F,bb,J,L,x_hat,r,2);
+u = genMPController(Linv,G,F,bb,J,L,x_MPC,r,2);
 
 end % End of myMPController
 
