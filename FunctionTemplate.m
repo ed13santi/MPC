@@ -83,11 +83,11 @@ N = 15;
 %    P = diag([1,1,1,1,1,1,1,1])
 %    Q = diag([1,1,1,1,1,1,1,1])
 %else
-P = 100 * diag(ones(8,1));
-Q = 100 * diag(ones(8,1));
+P = 100000 * diag([1,1,1,1,0,0,0,0]);
+Q = 100000 * diag([1,1,1,1,0,0,0,0]);
 %end
        
-R = diag([1;1]);
+R = 0.00000001 * diag([1;1]);
 
 A = param.A;
 B = param.B;
@@ -100,12 +100,13 @@ D(1,1) = DRect(1,1);
 D(2,1) = DRect(2,1);
 D(1,3) = DRect(1,2);
 D(2,3) = DRect(2,2);
-%D(3,5) = 1; %limit on Theta
-%D(4,7) = 1; %limit on Phi
+D(3,5) = 1; %limit on Theta
+D(4,7) = 1; %limit on Phi
 
 % Compute stage constraint matrices and vector
-cl = [clRect];%; -0.1*pi; -0.1*pi];
-ch = [chRect];%; 0.1*pi; 0.1*pi];
+ang_lim = 0.01*pi;
+cl = [clRect; -ang_lim; -ang_lim];
+ch = [chRect; ang_lim; ang_lim];
 ul = [-1; -1];
 uh = [1; 1];
 [Dt,Et,bt] = genStageConstraints(A,B,D,cl,ch,ul,uh);
@@ -126,6 +127,8 @@ Linv = linsolve(Lchol,eye(size(Lchol)),struct('LT',true));
 
 % Run a linear simulation to test your genMPController function
 u = genMPController(Linv,G,F,bb,J,L,x_MPC,r,2);
+
+u = u(1:2);
 
 end % End of myMPController
 
