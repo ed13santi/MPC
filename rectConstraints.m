@@ -3,16 +3,17 @@ function [mat, ch, cl] = rectConstraints(rect)
     B = rect(2,:);
     C = rect(3,:);
     D = rect(4,:);
-    [a1,c1] = lineParams(A,D);
-    [a2,c2] = lineParams(A,B);
-    [a3,c3] = lineParams(B,C);
-    [a4,c4] = lineParams(D,C);
     
-    mat  = [ a1 , 1-a1;
-             a2 , 1-a2 ];% CHECK THIS MIGHT BE WRONG!!!
+    a1 = linePars(A,D);
+    a2 = linePars(A,B);
+    a3 = linePars(B,C);
+    a4 = linePars(D,C);
+    
+    mat  = [ a1(1) , a1(2);
+             a2(1) , a1(2) ];
          
-    ch = [ max(c1,c3); max(c2,c4) ];
-    cl = [ min(c1,c3); min(c2,c4) ];
+    ch = [ max(-a1(3),-a3(3)); max(-a2(3),-a4(3)) ];
+    cl = [ min(-a1(3),-a3(3)); min(-a2(3),-a4(3)) ];
 end
 
 

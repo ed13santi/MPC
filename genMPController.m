@@ -1,4 +1,4 @@
-function u = genMPController(H,G,F,bb,J,L,x,xTarget,m)
+function u = genMPController(H,G,F,bb,J,L,x,xTarget,m,N)
 % H       - quadratic term in the cost function (Linv if using mpcActiveSetSolver).
 % G       - matrix in the linear term in the cost function.
 % F       - LHS of the inequalities term.
@@ -17,18 +17,29 @@ function u = genMPController(H,G,F,bb,J,L,x,xTarget,m)
 % Please read the documentation on mpcActiveSetSolver to understand how it is
 % suppose to be used. Use iA and iA1 to pass the active inequality vector 
 
-opt.MaxIterations = 200;
-opt.IntegrityChecks = false;%% for code generation
-opt.ConstraintTolerance = 1e-3;
-opt.DataType = 'double';
-opt.UseHessianAsInput = false;
+%opt.MaxIterations = 200;
+%opt.IntegrityChecks = false;%% for code generation
+%opt.ConstraintTolerance = 1e-3;
+%opt.DataType = 'double';
+%opt.UseHessianAsInput = false;
 %% your code starts here
 linTerm = G * (x - xTarget);
 rightIneqConstr = bb + J*x + L*xTarget;
-[U,~] = mpcActiveSetSolver(H, linTerm, F, rightIneqConstr, [], zeros(0,1), false(size(bb)), opt); 
-%CEHCK IA CONTRAINT THING
+%persistent iA
+%if isempty(iA)
+%    iA = 
+%end
+%[U,~,iA,~] = mpcActiveSetSolver(H, linTerm, F, rightIneqConstr, [], zeros(0,1), false(size(bb)), opt);
+
+persistent u0
+if isempty(u0)
+    u0 = zeros(m*N+2,1);
+end
+options =  optimset('Display', 'on');
+U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options);
 %% your remaining code here
-u = U(1:m);
+u = U(1:2);
+u0 = U;
 end
 
 
