@@ -80,16 +80,17 @@ N = 25;
 % Declare penalty matrices: 
 eps = 1e-10;
 lambda = 1e15; %coefficient of work soft constraint
-P = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
+P = 100000 * diag([1,1,1,1,eps,1,eps,1]);
 Q = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
-R = diag([0.001;0.001;lambda;lambda]);
+R = diag([0.001;0.001;eps;eps]);
 
 M = blkdiag(Q,R);
-H = blkdiag( kron(eye(N), M), P );
+H = blkdiag( kron(eye(N), M), P, lambda );
 
 offsetOneTimeStep = [ - r(1); 0; - r(1); 0; 0; 0; 0; 0; zeros(length(u),1) ];
 offsetMatrix = [ kron(ones(N,1), offsetOneTimeStep);
-                 [ - r(1); 0; - r(1); 0; 0; 0; 0; 0] ];
+                 [ - r(1); 0; - r(1); 0; 0; 0; 0; 0];
+                 0 ];
 f = H' * offsetMatrix;
 
 
@@ -113,27 +114,27 @@ for i=0:N-1
     G_bot(v_start:v_end,h_start:h_end) = G_block;
 end
 G = [G_top; G_bot];
+G = blkdiag(G, 0);
 
 g = [x_hat; zeros(N * step, 1)];
+g = [g; 0];
 
 
 
 % Constraints 
 [DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
-D = [];
 
 % rectangle constraints
-D = [D; [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]]; 
-D = [D; [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]]; 
-
-D = [D; [0 0 0 0 1 0 0 0]]; %limit on Theta
-D = [D; [0 0 0 0 0 0 1 0]]; %limit on Phi
+D = [ [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]; 
+      [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]; 
+      [0 0 0 0 1 0 0 0]; %limit on Theta
+      [0 0 0 0 0 0 1 0] ]; %limit on Phi
 
 E = [ 1        , 0       , 0 ,  0;   % -1 < u_x < 1
       0        , 1       , 0 ,  0;   % -1 < u_y < 1
-      x_hat(2) , 0       , -1,  0;   % x_dot * u_x < gamma_x
+      %x_hat(2) , 0       , -1,  0;   % x_dot * u_x < gamma_x
       0        , 0       , -1,  0;   % 0 < gamma_x
-      0        , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
+      %0        , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
       0        , 0       , 0 , -1 ]; % 0 < gamma_y
 
   
@@ -145,21 +146,24 @@ ul = [-1; -1];
 uh = [1; 1; 0; 0; 0; 0];
 [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
 
-
+% Compute non-linear constraints
 
 % Compute trajectory constraints matrices and vector
 [D,d] = genTrajectoryConstraintsSparse(Dt,Et,bt,N);
 
 
 %add constraint on sum of gammas
-tmp_row = zeros(1, size(D,2));
+tmp_row = zeros(1, size(D,2)+1);
 for i=8+3:8+length(uh):size(D,2)
     tmp_row(i) = 1;
     tmp_row(i + 1) = 1;
 end
-D = [ D; - tmp_row ]; % sum of gammas > work limit
+tmp_row(1,end) = - 1;
+D = [ D, zeros(size(D,1),1) ];
+D = [ D; - tmp_row ]; % sum of gammas < z work limit
+D = [ D; [zeros(1, size(D,2)-1), -1] ]; % z > z work limit
 
-d = [d; - param.Wmax * N / param.Tf];
+d = [d; 0; - param.Wmax * N / param.Tf];
 
 % Prepare cost and constraint matrices for mpcActiveSetSolver
 % See doc for mpcActiveSetSolver
@@ -273,10 +277,11 @@ function u = genMPControllerSparse(H,f,G,g,D,d,m,N)
 
 persistent w0
 if isempty(w0)
-    u0 = zeros(m*N+8*(N+1),1);
+    w0 = zeros(m*N+8*(N+1)+1,1);
 end
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
-W = quadprog(H, f, D, d, G, g, [], [], u0);
+options = optimoptions('quadprog', 'Algorithm', 'active-set')
+W = quadprog(H, f, D, d, G, g, [], [], w0, options);
 %% your remaining code here
 u = W(9:10);
 W0 = W;

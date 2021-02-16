@@ -13,10 +13,11 @@ function u = genMPControllerSparse(H,f,G,g,D,d,m,N)
 
 persistent w0
 if isempty(w0)
-    u0 = zeros(m*N+8*(N+1),1);
+    w0 = zeros(m*N+8*(N+1)+1,1);
 end
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
-W = quadprog(H, f, D, d, G, g, [], [], u0);
+options = optimoptions('quadprog', 'Algorithm', 'active-set')
+W = quadprog(H, f, D, d, G, g, [], [], w0, options);
 %% your remaining code here
 u = W(9:10);
 W0 = W;

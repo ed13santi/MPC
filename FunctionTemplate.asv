@@ -79,17 +79,18 @@ N = 25;
 
 % Declare penalty matrices: 
 eps = 1e-10;
-lambda = 1e5; %coefficient of work soft constraint
+lambda = 1e15; %coefficient of work soft constraint
 P = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
 Q = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
-R = diag([0.001;0.001;lambda;lambda]);
+R = diag([0.001;0.001;eps;eps]);
 
 M = blkdiag(Q,R);
-H = blkdiag( kron(eye(N), M), P );
+H = blkdiag( kron(eye(N), M), P, lambda );
 
 offsetOneTimeStep = [ - r(1); 0; - r(1); 0; 0; 0; 0; 0; zeros(length(u),1) ];
 offsetMatrix = [ kron(ones(N,1), offsetOneTimeStep);
-                 [ - r(1); 0; - r(1); 0; 0; 0; 0; 0] ];
+                 [ - r(1); 0; - r(1); 0; 0; 0; 0; 0];
+                 0 ];
 f = H' * offsetMatrix;
 
 
@@ -113,28 +114,30 @@ for i=0:N-1
     G_bot(v_start:v_end,h_start:h_end) = G_block;
 end
 G = [G_top; G_bot];
+G = blkdiag(G, 0);
 
 g = [x_hat; zeros(N * step, 1)];
+g = [g; 0];
 
 
 
 % Constraints 
 [DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
-D = [];
 
 % rectangle constraints
-D = [D; [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]]; 
+D = [D; 
+    [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]]; 
 D = [D; [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]]; 
 
 D = [D; [0 0 0 0 1 0 0 0]]; %limit on Theta
 D = [D; [0 0 0 0 0 0 1 0]]; %limit on Phi
 
 E = [ 1        , 0       , 0 ,  0;   % -1 < u_x < 1
-      0        , 1       , 0 ,  0; ];  % -1 < u_y < 1
-%       x_hat(2) , 0       , -1,  0;   % x_dot * u_x < gamma_x
-%       0        , 0       , -1,  0;   % 0 < gamma_x
-%       0        , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
-%       0        , 0       , 0 , -1 ]; % 0 < gamma_y
+      0        , 1       , 0 ,  0;   % -1 < u_y < 1
+      x_hat(2) , 0       , -1,  0;   % x_dot * u_x < gamma_x
+      0        , 0       , -1,  0;   % 0 < gamma_x
+      0        , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
+      0        , 0       , 0 , -1 ]; % 0 < gamma_y
 
   
 % Compute stage constraint matrices and vector
@@ -142,7 +145,7 @@ ang_lim = 4*pi/180;
 cl = [clRect; -ang_lim; -ang_lim];
 ch = [chRect; ang_lim; ang_lim];
 ul = [-1; -1];
-uh = [1; 1];% 0; 0; 0; 0];
+uh = [1; 1; 0; 0; 0; 0];
 [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
 
 
@@ -152,14 +155,17 @@ uh = [1; 1];% 0; 0; 0; 0];
 
 
 %add constraint on sum of gammas
-% tmp_row = zeros(1, size(D,2));
-% for i=8+3:8+length(uh):size(D,2)
-%     tmp_row(i) = 1;
-%     tmp_row(i + 1) = 1;
-% end
-% D = [ D; - tmp_row ]; % sum of gammas > work limit
-% 
-% d = [d; - param.Wmax * N / param.Tf];
+tmp_row = zeros(1, size(D,2)+1);
+for i=8+3:8+length(uh):size(D,2)
+    tmp_row(i) = 1;
+    tmp_row(i + 1) = 1;
+end
+tmp_row(1,end) = - 1;
+D = [ D, zeros(size(D,1),1) ];
+D = [ D; - tmp_row ]; % sum of gammas < z work limit
+D = [ D; [zeros(1, size(D,2)-1), -1] ]; % z > z work limit
+
+d = [d; 0; - param.Wmax * N / param.Tf];
 
 % Prepare cost and constraint matrices for mpcActiveSetSolver
 % See doc for mpcActiveSetSolver
@@ -169,9 +175,6 @@ uh = [1; 1];% 0; 0; 0; 0];
 % Run a linear simulation to test your genMPController function
 %u = genMPController(Linv,G,F,bb,J,L,x_MPC,r,length(u));
 u = genMPControllerSparse(H,f,G,g,D,d,length(u),N);
-
-
-u = u(1:2);
 
 end % End of myMPController
 
@@ -276,13 +279,14 @@ function u = genMPControllerSparse(H,f,G,g,D,d,m,N)
 
 persistent w0
 if isempty(w0)
-    u0 = zeros(m*N+8*(N+1),1);
+    w0 = zeros(m*N+8*(N+1)+1,1);
 end
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
-W = quadprog(H, f, D, d, G, g, [], [], u0);
+options = optimoptions('quadprog', 'Algorithm', 'active-set')
+W = quadprog(H, f, D, d, G, g, [], [], w0, options);
 %% your remaining code here
-w = W(1:2);
-u0 = U;
+u = W(9:10);
+W0 = W;
 end
 
 function [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh) 
