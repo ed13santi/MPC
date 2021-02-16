@@ -18,7 +18,7 @@ if coursenum == 1
     penalties = [-1, -2, -1, -1];
     
     start  = [0.05, 0.05];
-    target = [0.50, 0.45];
+    target = [0.45, 0.45];
     
     Wmax = 0.01;
     Tf   = 5;

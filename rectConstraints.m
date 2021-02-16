@@ -10,10 +10,10 @@ function [mat, ch, cl] = rectConstraints(rect)
     a4 = linePars(D,C);
     
     mat  = [ a1(1) , a1(2);
-             a2(1) , a1(2) ];
+             a2(1) , a2(2) ];
          
-    ch = [ max(-a1(3),-a3(3)); max(-a2(3),-a4(3)) ];
-    cl = [ min(-a1(3),-a3(3)); min(-a2(3),-a4(3)) ];
+    ch = [ max(a1(3),a3(3)); max(a2(3),a4(3)) ];
+    cl = [ min(a1(3),a3(3)); min(a2(3),a4(3)) ];
 end
 
 

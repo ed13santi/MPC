@@ -33,10 +33,10 @@ rightIneqConstr = bb + J*x + L*xTarget;
 
 persistent u0
 if isempty(u0)
-    u0 = zeros(m*N+2,1);
+    u0 = zeros(m*N,1);
 end
-options =  optimset('Display', 'on');
-U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options);
+%options =  optimset('Display', 'on','UseHessianAsInput','False');
+U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0);
 %% your remaining code here
 u = U(1:2);
 u0 = U;

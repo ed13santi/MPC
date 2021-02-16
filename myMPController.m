@@ -9,14 +9,14 @@ u = zeros(4,1);
 x_MPC = x_hat(1:8);
 
 %horizon length
-N = 15;
+N = 25;
 
 %Declare penalty matrices: 
-eps = 0.00000001;
-lambda = 1e10; %coefficient of work soft constraint
+eps = 1e-10;
+lambda = 1e5; %coefficient of work soft constraint
 P = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
 Q = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
-R = 0.001 * diag([1;1;lambda*ones(length(u)-2,1)]);
+R = diag([0.001;0.001;lambda;lambda]);
 
 A = param.A;
 B = [param.B, zeros(8,length(u)-2)];
@@ -24,16 +24,14 @@ C = param.C;
 
 % Constraints 
 [DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
-D = zeros(2, size(param.A,1));
+D = [];
 
 % rectangle constraints
-D(1,1) = DRect(1,1); 
-D(2,1) = DRect(2,1);
-D(1,3) = DRect(1,2);
-D(2,3) = DRect(2,2);
+D = [D; [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]]; 
+D = [D; [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]]; 
 
-D(3,5) = 1; %limit on Theta
-D(4,7) = 1; %limit on Phi
+D = [D; [0 0 0 0 1 0 0 0]]; %limit on Theta
+D = [D; [0 0 0 0 0 0 1 0]]; %limit on Phi
 E = [ 1       , 0       , 0 ,  0;   % -1 < u_x < 1
       0       , 1       , 0 ,  0;   % -1 < u_y < 1
       x_hat(2), 0       , -1,  0;   % x_dot * u_x < gamma_x
@@ -42,7 +40,7 @@ E = [ 1       , 0       , 0 ,  0;   % -1 < u_x < 1
       0       , 0       , 0 , -1 ]; % 0 < gamma_y
 
 % Compute stage constraint matrices and vector
-ang_lim = 0.005*pi;
+ang_lim = 4*pi/180;
 cl = [clRect; -ang_lim; -ang_lim];
 ch = [chRect; ang_lim; ang_lim];
 ul = [-1; -1];
@@ -53,10 +51,10 @@ uh = [1; 1; 0; 0; 0; 0];
 [DD,EE,bb] = genTrajectoryConstraints(Dt,Et,bt,N);
 
 
-%add z constraints
+%add constraint on sum of gammas
 DD = [ DD; zeros(1, size(DD,2)) ];
 tmp_row = zeros(1, size(EE,2));
-for i=3:length(uh):size(EE,2)+1
+for i=3:length(uh):size(EE,2)
     tmp_row(i) = 1;
     tmp_row(i + 1) = 1;
 end
@@ -74,8 +72,8 @@ bb = [bb; - param.Wmax * N / param.Tf];
 
 % Prepare cost and constraint matrices for mpcActiveSetSolver
 % See doc for mpcActiveSetSolver
-%[Lchol,p] = chol(H,'lower');
-%Linv = linsolve(Lchol,eye(size(Lchol)),struct('LT',true));
+% [Lchol,p] = chol(H,'lower');
+% Linv = linsolve(Lchol,eye(size(Lchol)),struct('LT',true));
 
 % Run a linear simulation to test your genMPController function
 %u = genMPController(Linv,G,F,bb,J,L,x_MPC,r,length(u));
