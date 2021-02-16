@@ -13,7 +13,7 @@ N = 15;
 
 %Declare penalty matrices: 
 eps = 0.00000001;
-lambda = 10e10; %coefficient of work soft constraint
+lambda = 1e10; %coefficient of work soft constraint
 P = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
 Q = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
 R = 0.001 * diag([1;1;lambda*ones(length(u)-2,1)]);
