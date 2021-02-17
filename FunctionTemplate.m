@@ -143,7 +143,7 @@ ang_lim = 4*pi/180;
 cl = [clRect; -ang_lim; -ang_lim];
 ch = [chRect; ang_lim; ang_lim];
 ul = [-1; -1];
-uh = [1; 1; 0; 0; 0; 0];
+uh = [1; 1; 0; 0];% 0; 0];
 [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
 
 % Compute non-linear constraints
@@ -280,8 +280,11 @@ if isempty(w0)
     w0 = zeros(m*N+8*(N+1)+1,1);
 end
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
-options = optimoptions('quadprog', 'Algorithm', 'active-set')
-W = quadprog(H, f, D, d, G, g, [], [], w0, options);
+options = optimoptions('fmincon', 'Algorithm', 'active-set')
+%W = quadprog(H, f, D, d, G, g, [], [], w0, options);
+nonLinConstr = @(w) workConstr(w, m, N);
+func = @(w) 0.5 * w' * H * w + f' * w;
+W = fmincon(func, w0, D, d, G, g, [], [], nonLinConstr, options)
 %% your remaining code here
 u = W(9:10);
 W0 = W;
@@ -306,3 +309,13 @@ d = kron(ones(N+1,1), bt);
 end
 
 
+function [c,ceq] = workConstr(w, u_len, N)
+    w = w(1:end-8);
+    c = [];
+    for i=0:u_len+8:(u_len+8)*(N-1)
+        c = [ c;
+              w(i+2) * w(i+9) - w(i+11);
+              w(i+4) * w(i+10) - w(i+12); ];
+    end
+    ceq = [];
+end

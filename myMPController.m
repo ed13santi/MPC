@@ -66,9 +66,9 @@ D = [ [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0];
 
 E = [ 1        , 0       , 0 ,  0;   % -1 < u_x < 1
       0        , 1       , 0 ,  0;   % -1 < u_y < 1
-      x_hat(2) , 0       , -1,  0;   % x_dot * u_x < gamma_x
+      %x_hat(2) , 0       , -1,  0;   % x_dot * u_x < gamma_x
       0        , 0       , -1,  0;   % 0 < gamma_x
-      0        , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
+      %0        , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
       0        , 0       , 0 , -1 ]; % 0 < gamma_y
 
   
@@ -77,10 +77,10 @@ ang_lim = 4*pi/180;
 cl = [clRect; -ang_lim; -ang_lim];
 ch = [chRect; ang_lim; ang_lim];
 ul = [-1; -1];
-uh = [1; 1; 0; 0; 0; 0];
+uh = [1; 1; 0; 0];% 0; 0];
 [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
 
-
+% Compute non-linear constraints
 
 % Compute trajectory constraints matrices and vector
 [D,d] = genTrajectoryConstraintsSparse(Dt,Et,bt,N);

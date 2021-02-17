@@ -16,8 +16,11 @@ if isempty(w0)
     w0 = zeros(m*N+8*(N+1)+1,1);
 end
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
-options = optimoptions('quadprog', 'Algorithm', 'active-set')
-W = quadprog(H, f, D, d, G, g, [], [], w0, options);
+options = optimoptions('fmincon', 'Algorithm', 'active-set')
+%W = quadprog(H, f, D, d, G, g, [], [], w0, options);
+nonLinConstr = @(w) workConstr(w, m, N);
+func = @(w) 0.5 * w' * H * w + f' * w;
+W = fmincon(func, w0, D, d, G, g, [], [], nonLinConstr, options)
 %% your remaining code here
 u = W(9:10);
 W0 = W;

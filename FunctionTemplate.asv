@@ -80,7 +80,7 @@ N = 25;
 % Declare penalty matrices: 
 eps = 1e-10;
 lambda = 1e15; %coefficient of work soft constraint
-P = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
+P = 100000 * diag([1,1,1,1,eps,1,eps,1]);
 Q = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
 R = diag([0.001;0.001;eps;eps]);
 
@@ -125,18 +125,16 @@ g = [g; 0];
 [DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
 
 % rectangle constraints
-D = [D; 
-    [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]]; 
-D = [D; [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]]; 
-
-D = [D; [0 0 0 0 1 0 0 0]]; %limit on Theta
-D = [D; [0 0 0 0 0 0 1 0]]; %limit on Phi
+D = [ [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]; 
+      [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]; 
+      [0 0 0 0 1 0 0 0]; %limit on Theta
+      [0 0 0 0 0 0 1 0] ]; %limit on Phi
 
 E = [ 1        , 0       , 0 ,  0;   % -1 < u_x < 1
       0        , 1       , 0 ,  0;   % -1 < u_y < 1
-      x_hat(2) , 0       , -1,  0;   % x_dot * u_x < gamma_x
+      %x_hat(2) , 0       , -1,  0;   % x_dot * u_x < gamma_x
       0        , 0       , -1,  0;   % 0 < gamma_x
-      0        , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
+      %0        , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
       0        , 0       , 0 , -1 ]; % 0 < gamma_y
 
   
@@ -148,7 +146,7 @@ ul = [-1; -1];
 uh = [1; 1; 0; 0; 0; 0];
 [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
 
-
+% Compute non-linear constraints
 
 % Compute trajectory constraints matrices and vector
 [D,d] = genTrajectoryConstraintsSparse(Dt,Et,bt,N);
@@ -308,3 +306,10 @@ d = kron(ones(N+1,1), bt);
 end
 
 
+function [c,ceq] = workConstr(w, u_len)
+    w = w(1:end-8);
+    for i 
+    c = [ (extrXDot * x_wave) .* (extrUx * u) - extrLambdaX * u;
+          (extrYDot * x_wave) .* (extrUy * u) - extrLambdaY * u ];
+    ceq = [];
+end
