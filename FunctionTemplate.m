@@ -98,12 +98,12 @@ D = [D; [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]];
 
 D = [D; [0 0 0 0 1 0 0 0]]; %limit on Theta
 D = [D; [0 0 0 0 0 0 1 0]]; %limit on Phi
-% E = [ 1       , 0       , 0 ,  0;   % -1 < u_x < 1
-%       0       , 1       , 0 ,  0;   % -1 < u_y < 1
-%       x_hat(2), 0       , -1,  0;   % x_dot * u_x < gamma_x
-%       0       , 0       , -1,  0;   % 0 < gamma_x
-%       0       , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
-%       0       , 0       , 0 , -1 ]; % 0 < gamma_y
+E = [ 1       , 0       , 0 ,  0;   % -1 < u_x < 1
+      0       , 1       , 0 ,  0;   % -1 < u_y < 1
+      x_hat(2), 0       , -1,  0;   % x_dot * u_x < gamma_x
+      0       , 0       , -1,  0;   % 0 < gamma_x
+      0       , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
+      0       , 0       , 0 , -1 ]; % 0 < gamma_y
   
 % Compute stage constraint matrices and vector
 ang_lim = 4*pi/180;

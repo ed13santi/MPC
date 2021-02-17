@@ -38,7 +38,7 @@ E = [ 1       , 0       , 0 ,  0;   % -1 < u_x < 1
       0       , 0       , -1,  0;   % 0 < gamma_x
       0       , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
       0       , 0       , 0 , -1 ]; % 0 < gamma_y
-
+  
 % Compute stage constraint matrices and vector
 ang_lim = 4*pi/180;
 cl = [clRect; -ang_lim; -ang_lim];
