@@ -36,7 +36,8 @@ if isempty(u0)
     u0 = zeros(m*N,1);
 end
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
-U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0);
+options = optimoptions('quadprog', 'Algorithm', 'active-set')
+U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options);
 %% your remaining code here
 u = U(1:2);
 u0 = U;

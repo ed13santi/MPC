@@ -80,9 +80,16 @@ N = 25;
 %Declare penalty matrices: 
 eps = 1e-10;
 lambda = 1e5; %coefficient of work soft constraint
+
+if abs(x_MPC - r(1:8)) > param.tolerances.state(1:8)
 P = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
 Q = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
 R = diag([0.001;0.001;lambda;lambda]);
+else
+P = 100000 * diag([1,1,1,1,1,1,1,1]);
+Q = 100000 * diag([1,1,1,1,1,1,1,1]);
+R = diag([0.001;0.001;lambda;lambda]);
+end
 
 A = param.A;
 B = [param.B, zeros(8,length(u)-2)];
@@ -274,7 +281,8 @@ if isempty(u0)
     u0 = zeros(m*N,1);
 end
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
-U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0);
+options = optimoptions('quadprog', 'Algorithm', 'active-set')
+U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options);
 %% your remaining code here
 u = U(1:2);
 u0 = U;
