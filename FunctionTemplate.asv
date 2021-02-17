@@ -132,7 +132,7 @@ G = [G_top; G_bot];
 
 % rectangle constraints
 D = [ [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]; 
-      [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]; 
+      [DRect(2,1) 0 DRect(2,2) 0 0 0 0 0]; 
       [0 0 0 0 1 0 0 0]; %limit on Theta
       [0 0 0 0 0 0 1 0] ]; %limit on Phi
 
@@ -162,7 +162,8 @@ tolY = param.tolerances.state(2)/2;
 
 % rectangle constraints
 Dl = [ [DTrgt(1,1) 0 DTrgt(1,2) 0 0 0 0 0]; 
-       [0 DTrgt(2,1) 0 DTrgt(2,2) 0 0 0 0]; 
+       [DTrgt(2,1) 0 DTrgt(2,2) 0 0 0 0 0]; 
+       [0          1 0  
        [0 0 0 0 1 0 0 0]; %limit on Theta
        [0 0 0 0 0 0 1 0] ]; %limit on Phi
 

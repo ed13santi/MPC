@@ -163,8 +163,15 @@ tolY = param.tolerances.state(2)/2;
 % rectangle constraints
 Dl = [ [DTrgt(1,1) 0 DTrgt(1,2) 0 0 0 0 0]; 
        [DTrgt(2,1) 0 DTrgt(2,2) 0 0 0 0 0]; 
-       [0 0 0 0 1 0 0 0]; %limit on Theta
-       [0 0 0 0 0 0 1 0] ]; %limit on Phi
+       [0          1 0          0 0 0 0 0];
+       [0          0 0          1 0 0 0 0];
+       [0          0 0          0 1 0 0 0]; %limit on Theta
+       [0          0 0          0 0 1 0 0];
+       [0          0 0          0 0 0 1 0]; %limit on Phi
+       [0          0 0          0 0 0 0 1] ]; 
+   
+cll = [clRect; -ang_lim; -ang_lim];
+chl = [chRect; ang_lim; ang_lim];
 
 % Prepare cost and constraint matrices for mpcActiveSetSolver
 % See doc for mpcActiveSetSolver
