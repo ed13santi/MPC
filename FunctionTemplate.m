@@ -74,26 +74,36 @@ u = zeros(4,1);
 %convert state to MPC's format
 x_MPC = x_hat(1:8);
 
-% horizon length
-N = 25;
+
+persistent t
+if isempty(t)
+    t = 0;
+else
+    t = t + param.Ts;
+end
+
+%horizon length
+N = max(10, floor((param.Tf - t) / param.Ts));
 
 % Declare penalty matrices: 
 eps = 1e-10;
 lambda = 1e15; %coefficient of work soft constraint
-P = 100000 * diag([1,1,1,1,eps,1,eps,1]);
-Q = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
-R = diag([0.001;0.001;eps;eps]);
+P = diag([0,0,0,0,0,0,0,0]);
+Q = diag([0,0,0,0,0,0,0,0]);
+R = diag([0,0,0,0,0,0]);
+S = [ 0,0,0,0;
+      0,0,1,0;
+      0,0,0,0;
+      0,0,0,1;
+      0,0,0,0;
+      0,0,0,0;
+      0,0,0,0;
+      0,0,0,0 ];
 
-M = blkdiag(Q,R);
-H = blkdiag( kron(eye(N), M), P, lambda );
+M = [[Q,S];[S',R]];
+H = blkdiag( kron(eye(N), M), P );
 
-offsetOneTimeStep = [ - r(1); 0; - r(1); 0; 0; 0; 0; 0; zeros(length(u),1) ];
-offsetMatrix = [ kron(ones(N,1), offsetOneTimeStep);
-                 [ - r(1); 0; - r(1); 0; 0; 0; 0; 0];
-                 0 ];
-f = H' * offsetMatrix;
-
-
+f = zeros( 1, length(u)*N + 8*(N+1) );
 
 % Equality constraints - model physics
 A = param.A;
@@ -114,10 +124,6 @@ for i=0:N-1
     G_bot(v_start:v_end,h_start:h_end) = G_block;
 end
 G = [G_top; G_bot];
-G = blkdiag(G, 0);
-
-g = [x_hat; zeros(N * step, 1)];
-g = [g; 0];
 
 
 
@@ -126,16 +132,11 @@ g = [g; 0];
 
 % rectangle constraints
 D = [ [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]; 
-      [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]; 
+      [DRect(2,1) 0 DRect(2,2) 0 0 0 0 0]; 
       [0 0 0 0 1 0 0 0]; %limit on Theta
       [0 0 0 0 0 0 1 0] ]; %limit on Phi
 
-E = [ 1        , 0       , 0 ,  0;   % -1 < u_x < 1
-      0        , 1       , 0 ,  0;   % -1 < u_y < 1
-      %x_hat(2) , 0       , -1,  0;   % x_dot * u_x < gamma_x
-      0        , 0       , -1,  0;   % 0 < gamma_x
-      %0        , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
-      0        , 0       , 0 , -1 ]; % 0 < gamma_y
+E = diag(eye(2),-eye(4));
 
   
 % Compute stage constraint matrices and vector
@@ -143,7 +144,7 @@ ang_lim = 4*pi/180;
 cl = [clRect; -ang_lim; -ang_lim];
 ch = [chRect; ang_lim; ang_lim];
 ul = [-1; -1];
-uh = [1; 1; 0; 0];% 0; 0];
+uh = [1; 1; 0; 0; 0; 0];
 [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
 
 % Compute non-linear constraints
@@ -151,19 +152,19 @@ uh = [1; 1; 0; 0];% 0; 0];
 % Compute trajectory constraints matrices and vector
 [D,d] = genTrajectoryConstraintsSparse(Dt,Et,bt,N);
 
+tolX = param.tolerances.state(1)/2;
+tolY = param.tolerances.state(2)/2;
 
-%add constraint on sum of gammas
-tmp_row = zeros(1, size(D,2)+1);
-for i=8+3:8+length(uh):size(D,2)
-    tmp_row(i) = 1;
-    tmp_row(i + 1) = 1;
-end
-tmp_row(1,end) = - 1;
-D = [ D, zeros(size(D,1),1) ];
-D = [ D; - tmp_row ]; % sum of gammas < z work limit
-D = [ D; [zeros(1, size(D,2)-1), -1] ]; % z > z work limit
+[DTrgt,chTrgt,clTrgt] = rectConstraints([ r(1)-tolX, r(2)-tolY;
+                                          r(1)+tolX, r(2)-tolY;
+                                          r(1)+tolX, r(2)+tolY;
+                                          r(1)-tolX, r(2)+tolY ]);
 
-d = [d; 0; - param.Wmax * N / param.Tf];
+% rectangle constraints
+Dl = [ [DTrgt(1,1) 0 DTrgt(1,2) 0 0 0 0 0]; 
+       [DTrgt(2,1) 0 DTrgt(2,2) 0 0 0 0 0]; 
+       [0 0 0 0 1 0 0 0]; %limit on Theta
+       [0 0 0 0 0 0 1 0] ]; %limit on Phi
 
 % Prepare cost and constraint matrices for mpcActiveSetSolver
 % See doc for mpcActiveSetSolver
@@ -305,7 +306,7 @@ function [D,d] = genTrajectoryConstraintsSparse(Dt,Et,bt,N)
 % your code goes here
 block = [Dt, Et];
 D = blkdiag(kron(eye(N), block), Dt);
-d = kron(ones(N+1,1), bt);
+d = kron(ones(N,1), bt);
 end
 
 
