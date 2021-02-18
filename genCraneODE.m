@@ -1,20 +1,6 @@
 function [A,B,C,D] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vx,Vy,Ts)
-% Inputs:
-% m = Pendulum mass (kg)
-% M = Cart mass (kg)
-% MR = Rail mass (kg)
-% r = String length (m)
-% g = gravitational accelaration (m*s^-2)
-% Tx = Damping coefficient in X direction (N*s*m^-1)
-% Ty = Damping coefficient in Y direction (N*s*m^-1)
-% Vm = Input multiplier (scalar)
-% Ts = Sample time of the discrete-time system (s)
-% Outputs:
-% A,B,C,D = State Space matrices of a discrete-time or continuous-time state space model
-
 % The motors in use on the gantry crane are identical and therefore Vx=Vy.
 
-% replace A,B,C,D with the correct values
 A=[ 0, 1,             0, 0,        0,                          0, 0,              0;
     0, -Tx/(M+MR),    0, 0,        g*m/(M+MR),                 0, 0,              0;
     0, 0,             0, 1,        0,                          0, 0,              0;

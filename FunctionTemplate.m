@@ -68,7 +68,7 @@ function u = myMPController(r, x_hat, param)
 
 %% Do not delete this line
 % Create the output array of the appropriate size
-u = zeros(4,1);
+u = zeros(6,1);
 %
 
 %convert state to MPC's format
@@ -86,21 +86,16 @@ end
 N = max(10, floor((param.Tf - t) / param.Ts));
 
 % Declare penalty matrices: 
-eps = 1e-10;
-lambda = 1e15; %coefficient of work soft constraint
 P = diag([0,0,0,0,0,0,0,0]);
 Q = diag([0,0,0,0,0,0,0,0]);
-R = diag([0,0,0,0,0,0]);
-S = [ 0,0,0,0;
-      0,0,1,0;
-      0,0,0,0;
-      0,0,0,1;
-      0,0,0,0;
-      0,0,0,0;
-      0,0,0,0;
-      0,0,0,0 ];
+R = [ 0,0,0,0,0,0;    % u_x
+      0,0,0,0,0,0;    % u_y
+      0,0,0,0,1,0;    % slack var for |u_x|
+      0,0,0,0,0,1;    % slack var for |u_y|
+      0,0,1,0,0,0;    % slack var for |x dot|
+      0,0,0,1,0,0 ];  % slack var for |y dot|
 
-M = [[Q,S];[S',R]];
+M = blkdiag(Q,R);
 H = blkdiag( kron(eye(N), M), P );
 
 f = zeros( 1, length(u)*N + 8*(N+1) );
@@ -125,29 +120,55 @@ for i=0:N-1
 end
 G = [G_top; G_bot];
 
+g = [x_MPC; zeros(8*N,1)];
 
 
 % Constraints 
 [DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
 
 % rectangle constraints
-D = [ [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]; 
-      [DRect(2,1) 0 DRect(2,2) 0 0 0 0 0]; 
-      [0 0 0 0 1 0 0 0]; %limit on Theta
-      [0 0 0 0 0 0 1 0] ]; %limit on Phi
-
-E = diag(eye(2),-eye(4));
-
+D = [ [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0];  %constraints on pair of sides of rectangle
+      [DRect(2,1) 0 DRect(2,2) 0 0 0 0 0];  %constraints on pair of sides of rectangle
+      [0 0 0 0 1 0 0 0];                    %limit on Theta
+      [0 0 0 0 0 0 1 0] ];                  %limit on Phi
   
-% Compute stage constraint matrices and vector
+
 ang_lim = 4*pi/180;
 cl = [clRect; -ang_lim; -ang_lim];
 ch = [chRect; ang_lim; ang_lim];
+
+E =      [1  0  0  0  0  0;    % -1 < u_x < 1
+          0  1  0  0  0  0;    % -1 < u_y < 1
+          0  0 -1  0  0  0;    % 0 < slack|u_x|
+          0  0  0 -1  0  0;    % 0 < slack|u_y|
+          0  0  0  0 -1  0;    % 0 < slack|xdot|
+          0  0  0  0  0 -1;    % 0 < slack|ydot|
+          1  0 -1  0  0  0;    % u_x < slack|u_x|
+         -1  0 -1  0  0  0;    % -u_x < slack|u_x|
+          0  1  0 -1  0  0;    % u_y < slack|u_y|
+          0 -1  0 -1  0  0 ];  % -u_y < slack|u_y|
+
 ul = [-1; -1];
-uh = [1; 1; 0; 0; 0; 0];
+uh = [1; 1; 0; 0; 0; 0; 0; 0; 0; 0];
+  
+% Compute stage constraint matrices and vector
 [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
 
-% Compute non-linear constraints
+
+% add relationship between x and u
+Dt = [Dt; 
+     [0  1 0  0 0 0 0 0;    % xdot < slack|xdot|
+      0 -1 0  0 0 0 0 0;    % -xdot < slack|xdot|
+      0  0 0  1 0 0 0 0;    % ydot < slack|ydot|
+      0  0 0 -1 0 0 0 0 ]]; % -ydot < slack|ydot|
+  
+Et = [Et; 
+     [0 0 0 0 -1  0;
+      0 0 0 0 -1  0;
+      0 0 0 0  0 -1;
+      0 0 0 0  0 -1 ]];
+
+bt = [bt; zeros(4,1)];
 
 % Compute trajectory constraints matrices and vector
 [D,d] = genTrajectoryConstraintsSparse(Dt,Et,bt,N);
@@ -159,19 +180,30 @@ tolY = param.tolerances.state(2)/2;
                                           r(1)+tolX, r(2)-tolY;
                                           r(1)+tolX, r(2)+tolY;
                                           r(1)-tolX, r(2)+tolY ]);
-
+                                      
+        
 % rectangle constraints
-Dl = [ [DTrgt(1,1) 0 DTrgt(1,2) 0 0 0 0 0]; 
-       [DTrgt(2,1) 0 DTrgt(2,2) 0 0 0 0 0]; 
-       [0          1 0          0 0 0 0 0];
-       [0          0 0          1 0 0 0 0];
-       [0          0 0          0 1 0 0 0]; %limit on Theta
-       [0          0 0          0 0 1 0 0];
-       [0          0 0          0 0 0 1 0]; %limit on Phi
-       [0          0 0          0 0 0 0 1] ]; 
+Dl = [ [DTrgt(1,1) 0 DTrgt(1,2) 0  0  0  0  0];   % constraints on pair of sides of rectangle
+       [DTrgt(2,1) 0 DTrgt(2,2) 0  0  0  0  0];   % constraints on pair of sides of rectangle
+       [0          1 0          0  0  0  0  0];   % xdot < tol
+       [0          0 0          1  0  0  0  0];   % ydot < 
+       [0          0 0          0  1  0  0  0];   % ang1 <
+       [0          0 0          0  0  1  0  0];   % ang1dot <
+       [0          0 0          0  0  0  1  0];   % ang2 <
+       [0          0 0          0  0  0  0  1];   % ang2dot <
+       [0         -1 0          0  0  0  0  0];   % same but other sign
+       [0          0 0         -1  0  0  0  0];   %
+       [0          0 0          0 -1  0  0  0];   %
+       [0          0 0          0  0 -1  0  0];   %
+       [0          0 0          0  0  0 -1  0];   %
+       [0          0 0          0  0  0  0 -1] ]; %
    
-cll = [clRect; -ang_lim; -ang_lim];
-chl = [chRect; ang_lim; ang_lim];
+tol = param.tolerances.state;
+
+D = blkdiag(D, Dl);
+E = [E; zeros(size(Dl,1),size(E,2))];
+d = [d; clRect; tol(2); tol(4:8); tol(2); tol(4:8)];
+
 
 % Prepare cost and constraint matrices for mpcActiveSetSolver
 % See doc for mpcActiveSetSolver
@@ -193,22 +225,8 @@ end % End of myMPController
 %% OTHER FUNCTIONS
 
 function [A,B,C,D] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vx,Vy,Ts)
-% Inputs:
-% m = Pendulum mass (kg)
-% M = Cart mass (kg)
-% MR = Rail mass (kg)
-% r = String length (m)
-% g = gravitational accelaration (m*s^-2)
-% Tx = Damping coefficient in X direction (N*s*m^-1)
-% Ty = Damping coefficient in Y direction (N*s*m^-1)
-% Vm = Input multiplier (scalar)
-% Ts = Sample time of the discrete-time system (s)
-% Outputs:
-% A,B,C,D = State Space matrices of a discrete-time or continuous-time state space model
-
 % The motors in use on the gantry crane are identical and therefore Vx=Vy.
 
-% replace A,B,C,D with the correct values
 A=[ 0, 1,             0, 0,        0,                          0, 0,              0;
     0, -Tx/(M+MR),    0, 0,        g*m/(M+MR),                 0, 0,              0;
     0, 0,             0, 1,        0,                          0, 0,              0;
@@ -285,17 +303,14 @@ function u = genMPControllerSparse(H,f,G,g,D,d,m,N)
 
 persistent w0
 if isempty(w0)
-    w0 = zeros(m*N+8*(N+1)+1,1);
+    w0 = zeros(m*N+8*(N+1),1);
 end
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
-options = optimoptions('fmincon', 'Algorithm', 'active-set')
-%W = quadprog(H, f, D, d, G, g, [], [], w0, options);
-nonLinConstr = @(w) workConstr(w, m, N);
-func = @(w) 0.5 * w' * H * w + f' * w;
-W = fmincon(func, w0, D, d, G, g, [], [], nonLinConstr, options)
+options = optimoptions('quadprog', 'Algorithm', 'active-set')
+W = quadprog(H, f, D, d, G, g, [], [], w0);
 %% your remaining code here
 u = W(9:10);
-W0 = W;
+w0 = W;
 end
 
 function [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh) 
@@ -310,20 +325,7 @@ function [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh)
 end
 
 function [D,d] = genTrajectoryConstraintsSparse(Dt,Et,bt,N)
-% your code goes here
 block = [Dt, Et];
-D = blkdiag(kron(eye(N), block), Dt);
+D = kron(eye(N), block);
 d = kron(ones(N,1), bt);
-end
-
-
-function [c,ceq] = workConstr(w, u_len, N)
-    w = w(1:end-8);
-    c = [];
-    for i=0:u_len+8:(u_len+8)*(N-1)
-        c = [ c;
-              w(i+2) * w(i+9) - w(i+11);
-              w(i+4) * w(i+10) - w(i+12); ];
-    end
-    ceq = [];
 end
