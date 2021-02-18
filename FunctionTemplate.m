@@ -12,7 +12,7 @@ param.Wmax = shape.Wmax;
 param.Tf = shape.Tf;    
 
 % This is how to set the sampling interval
-param.Ts = 0.05;
+param.Ts = 0.1;
 
 % This is a sample way to send reference points
 param.xTar = shape.target(1);
@@ -23,10 +23,16 @@ param.samples_max = 20;
 param.samples_min = 10;
 
 % Advance settling time by multiplying Ts by a factor
-param.advance = 0.99;
+param.advance = 0.9;
+
+% Cost matrices
+param.P = zeros(8);
+param.Q = zeros(8);
+param.R = eye(2);
 
 % Load model parameters and calculate matrices
 load('Crane_NominalParameters.mat');
+param.rope_len = r;
 [param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
 
 end % End of mySetup
@@ -58,14 +64,18 @@ if isempty(x_initial)
     x_initial = x_hat;
 end
 
-if t + param.samples_max * param.Ts > param.Tf
+t_target = t + param.samples_max * param.Ts;
+t_reach = param.advance * param.Tf;
+delta_x = param.xTar - x_initial(1);
+delta_y = param.yTar - x_initial(3);
+if t_target >= t_reach
     % Make the crane go to (xTar, yTar)
     r(1,1) = param.xTar;
     r(3,1) = param.yTar;
 else
-    ratio = (t + param.samples_max * param.Ts) / (param.advance * param.Tf);
-    r(1,1) = x_initial(1) + ratio * (param.xTar - x_initial(1))
-    r(3,1) = x_initial(3) + ratio * (param.yTar - x_initial(3))
+    ratio = t_target / t_reach;
+    r(1,1) = x_initial(1) + ratio * delta_x
+    r(3,1) = x_initial(3) + ratio * delta_y
 end
 
 end % End of myTargetGenerator
@@ -113,6 +123,8 @@ if isempty(x_initial)
     x_initial = x_hat;
 end
 
+
+
 %convert state to MPC's format
 x_MPC = x_hat(1:8);
 
@@ -122,46 +134,38 @@ time_left = time_settle - t;
 samples_left = floor(time_left/param.Ts);
 N = min(param.samples_max, max(param.samples_min, samples_left));
 
-%Declare penalty matrices: 
-%lambda = 1e3; %coefficient of work soft constraint
+[P,Q,R,A,B,C] = retrieveMatrices(param);
 
-% if abs(x_MPC - r(1:8)) > param.tolerances.state(1:8);
-%     P = diag([1,1,1,1,1,1,1,1]);
-%     Q = diag([0,0,0,0,0,0,0,0]);
-%     R = diag([0.001,0.001]);
-% else %when inside the target area
-%     P = diag([1,1,1,1,1,1,1,1]);
-%     Q = diag([1,1,1,1,1,1,1,1]);
-%     R = diag([1,1]);
+% modify cost matrices after reach destination
+% if t > param.advance * param.Ts
+%     Q = eye(8);
+%     P = eye(8);
 % end
-
-P = zeros(8);
-Q = zeros(8);
-R = eye(2);
-
-A = param.A;
-B = [param.B, zeros(8,length(u)-2)];
-C = param.C;
 
 % Constraints 
 [DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
 
 % rectangle constraints
+rope = param.rope_len;
 D = [ DRect(1,1) 0 DRect(1,2) 0 0 0 0 0; 
-      DRect(2,1) 0 DRect(2,2) 0 0 0 0 0; 
+      DRect(2,1) 0 DRect(2,2) 0 0 0 0 0;  
+      DRect(1,1) 0 DRect(1,2) 0 rope*DRect(1,1) 0 rope*DRect(1,2) 0;
+      DRect(2,1) 0 DRect(2,2) 0 rope*DRect(2,1) 0 rope*DRect(2,2) 0;
       0          0 0          0 1 0 0 0; %limit on Theta
-      0          0 0          0 0 0 1 0  %limit on Phi
+      0          0 0          0 0 0 1 0;  %limit on Phi
     ];
-  
-ang_lim = 10*pi/180;
+ang_lim = 8*pi/180;
 cl = [clRect; 
+      clRect; 
       -ang_lim; 
       -ang_lim
      ];
 ch = [chRect; 
+      chRect; 
       ang_lim; 
       ang_lim
      ];
+ 
   
 E = [ 1       , 0;   % -1 < u_x < 1
       0       , 1;   % -1 < u_y < 1
@@ -180,7 +184,6 @@ uh = [ 1;
 [DD,EE,bb] = genTrajectoryConstraints(Dt,Et,bt,N);
 
 % Add temporary target constraints
-
 if t + param.samples_max * param.Ts > param.Tf
     DD = [DD; [zeros(16,8*(N-1)), [eye(8); -eye(8)]]];
     EE = [EE; zeros(16,size(EE,2))];
@@ -459,3 +462,11 @@ G = (extendedGamma'*bigQ'*extendedPhi) * 2;
 
 end
 
+function [P,Q,R,A,B,C] = retrieveMatrices(param)
+    P = param.P;
+    Q = param.Q;
+    R = param.R;
+    A = param.A;
+    B = param.B;
+    C = param.C;
+end
