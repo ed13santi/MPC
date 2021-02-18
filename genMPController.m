@@ -45,7 +45,7 @@ if diff ~= 0
 end
 
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
-options = optimoptions('quadprog', 'Algorithm', 'active-set', 'Display', 'off')
+options = optimoptions('quadprog', 'Algorithm', 'active-set', 'Display', 'off');
 U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options);
 %objFunc = @(u) 0.5*u'*H*u + linTerm'*u;
 %nonl = @(u) workConstr(u, x, N, Phi, Gamma);

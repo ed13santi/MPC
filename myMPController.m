@@ -18,7 +18,7 @@ end
 x_MPC = x_hat(1:8);
 
 %horizon length
-N = max(1,floor(0.85*(param.Tf-t)/param.Ts));
+N = max(1,floor((0.99*param.Tf-t)/param.Ts));
 
 %Declare penalty matrices: 
 %lambda = 1e3; %coefficient of work soft constraint
@@ -33,9 +33,9 @@ N = max(1,floor(0.85*(param.Tf-t)/param.Ts));
 %     R = diag([1,1]);
 % end
 
-P = diag([1,1,1,1,1,1,1,1]);
-    Q = diag([0,0,0,0,0,0,0,0]);
-    R = diag([0.001,0.001]);
+P = zeros(8);
+Q = zeros(8);
+R = eye(2);
 
 A = param.A;
 B = [param.B, zeros(8,length(u)-2)];
@@ -77,13 +77,16 @@ uh = [ 1;
 % Compute trajectory constraints matrices and vector
 [DD,EE,bb] = genTrajectoryConstraints(Dt,Et,bt,N);
 
-% DD = [DD; [zeros(16,8*(N-1)), [eye(8); -eye(8)]]];
-% EE = [EE; zeros(16,size(EE,2))];
-% bb = [bb; param.tolerances.state(1:8); param.tolerances.state(1:8)];
+DD = [DD; [zeros(16,8*(N-1)), [eye(8); -eye(8)]]];
+EE = [EE; zeros(16,size(EE,2))];
+bb = [bb; 
+      r(1:8) + param.tolerances.state(1:8)./2; 
+      param.tolerances.state(1:8)./2 - r(1:8);
+     ];
 
 % Compute QP constraint matrices
 [Gamma,Phi] = genPrediction(A,B,N);
-[F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N,5);
+[F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N,u_len);
 
 % Compute QP cost matrices
 [H,G] = genCostMatrices(Gamma,Phi,Q,R,P,N);
