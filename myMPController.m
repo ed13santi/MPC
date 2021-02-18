@@ -12,17 +12,16 @@ x_MPC = x_hat(1:8);
 N = 25;
 
 %Declare penalty matrices: 
-eps = 1e-10;
-lambda = 1e5; %coefficient of work soft constraint
+lambda = 1e15; %coefficient of work soft constraint
 
 if abs(x_MPC - r(1:8)) > param.tolerances.state(1:8)
-P = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
-Q = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
-R = diag([0.001;0.001;lambda;lambda]);
+P = diag([1,1,1,1,0,0,0,0]);
+Q = diag([0,0,0,0,0,0,0,0]);
+R = diag([0;0;lambda;lambda]);
 else
-P = 100000 * diag([1,1,1,1,1,1,1,1]);
-Q = 100000 * diag([1,1,1,1,1,1,1,1]);
-R = diag([0.001;0.001;lambda;lambda]);
+P = diag([1,1,1,1,1,1,1,1]);
+Q = diag([1,1,1,1,1,1,1,1]);
+R = diag([0;0;lambda;lambda]);
 end
 
 A = param.A;
@@ -34,24 +33,25 @@ C = param.C;
 D = [];
 
 % rectangle constraints
-D = [D; [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]]; 
-D = [D; [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]]; 
-
-D = [D; [0 0 0 0 1 0 0 0]]; %limit on Theta
-D = [D; [0 0 0 0 0 0 1 0]]; %limit on Phi
-E = [ 1       , 0       , 0 ,  0;   % -1 < u_x < 1
-      0       , 1       , 0 ,  0;   % -1 < u_y < 1
-      x_hat(2), 0       , -1,  0;   % x_dot * u_x < gamma_x
-      0       , 0       , -1,  0;   % 0 < gamma_x
-      0       , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
-      0       , 0       , 0 , -1 ]; % 0 < gamma_y
+D = [ DRect(1,1) 0 DRect(1,2) 0 0 0 0 0; 
+      DRect(2,1) 0 DRect(2,2) 0 0 0 0 0; 
+      0          0 0          0 1 0 0 0; %limit on Theta
+      0          0 0          0 0 0 1 0 ]; %limit on Phi
   
-% Compute stage constraint matrices and vector
 ang_lim = 4*pi/180;
 cl = [clRect; -ang_lim; -ang_lim];
 ch = [chRect; ang_lim; ang_lim];
+  
+E = [ 1       , 0       , 0 ,  0;   % -1 < u_x < 1
+      0       , 1       , 0 ,  0;   % -1 < u_y < 1
+      %x_hat(2), 0       , -1,  0;   % x_dot * u_x < gamma_x
+      0       , 0       , -1,  0;   % 0 < gamma_x
+      %0       , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
+      0       , 0       , 0 , -1 ]; % 0 < gamma_y
+  
 ul = [-1; -1];
-uh = [1; 1; 0; 0; 0; 0];
+uh = [ 1;  1; 0; 0];%; 0; 0];
+
 [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
 
 % Compute trajectory constraints matrices and vector
@@ -66,7 +66,6 @@ for i=3:length(uh):size(EE,2)
     tmp_row(i + 1) = 1;
 end
 EE = [ EE; - tmp_row ]; % sum of gammas > work limit
-
 
 bb = [bb; - param.Wmax * N / param.Tf];
 
