@@ -17,11 +17,11 @@ function u = genMPController(H,G,F,bb,J,L,x,xTarget,m,N,Phi,Gamma)
 % Please read the documentation on mpcActiveSetSolver to understand how it is
 % suppose to be used. Use iA and iA1 to pass the active inequality vector 
 
-opt.MaxIterations = 200;
-opt.IntegrityChecks = false;%% for code generation
-opt.ConstraintTolerance = 1e-3;
-opt.DataType = 'double';
-opt.UseHessianAsInput = false;
+% opt.MaxIterations = 200;
+% opt.IntegrityChecks = false;%% for code generation
+% opt.ConstraintTolerance = 1e-3;
+% opt.DataType = 'double';
+% opt.UseHessianAsInput = false;
 %% your code starts here
 linTerm = G * (x - xTarget);
 if size(J,1) == 0
@@ -39,6 +39,11 @@ persistent u0
 if isempty(u0)
     u0 = zeros(m*N,1);
 end
+diff = length(u0) - m*N;
+if diff ~= 0
+    u0 = u0(1+diff:end);
+end
+
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
 options = optimoptions('quadprog', 'Algorithm', 'active-set', 'Display', 'off')
 U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options);
@@ -48,7 +53,6 @@ U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options
 %U = fmincon(objFunc, u0, F, rightIneqConstr, [], [], [], [], nonl, options);
 %% your remaining code here
 u = U(1:2);
-
 u0 = U;
 end
 

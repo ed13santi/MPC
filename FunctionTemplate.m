@@ -12,7 +12,7 @@ param.Wmax = shape.Wmax;
 param.Tf = shape.Tf;    
 
 % This is how to set the sampling interval
-param.Ts = 0.05;
+param.Ts = 0.2;
 
 % This is a sample way to send reference points
 param.xTar = shape.target(1);
@@ -68,32 +68,36 @@ function u = myMPController(r, x_hat, param)
 
 %% Do not delete this line
 % Create the output array of the appropriate size
-u_len = 4;
+u_len = 2;
 u = zeros(u_len,1);
 %
+
+% current time
+persistent t
+if isempty(t)
+    t = 0;
+else
+    t = t + (0.85*param.Ts);
+end
 
 %convert state to MPC's format
 x_MPC = x_hat(1:8);
 
 %horizon length
-N = 25;
+N = max(1,floor((param.Tf-t)/param.Ts));
 
 %Declare penalty matrices: 
 lambda = 1e3; %coefficient of work soft constraint
 
-% if abs(x_MPC - r(1:8)) > param.tolerances.state(1:8)
-% P = diag([1,1,1,1,1,1,1,1]);
-% Q = diag([0,0,0,0,0,0,0,0]);
-% R = diag([0;0;lambda;lambda]);
-% else
-% P = diag([1,1,1,1,1,1,1,1]);
-% Q = diag([1,1,1,1,1,1,1,1]);
-% R = diag([0;0;lambda;lambda]);
-% end
-
-P = diag([1,1,1,1,1,1,1,1]);
-Q = diag([1,1,1,1,1,1,1,1]);
-R = diag([0;0;lambda;lambda]);
+if abs(x_MPC - r(1:8)) > param.tolerances.state(1:8)s
+    P = diag([1,1,1,1,1,1,1,1]);
+    Q = diag([0,0,0,0,0,0,0,0]);
+    R = diag([0.001;0.001]);
+else %when inside the target area
+    P = diag([1,1,1,1,1,1,1,1]);
+    Q = diag([1,1,1,1,1,1,1,1]);
+    R = diag([1;1]);
+end
 
 A = param.A;
 B = [param.B, zeros(8,length(u)-2)];
@@ -109,7 +113,7 @@ D = [ DRect(1,1) 0 DRect(1,2) 0 0 0 0 0;
       0          0 0          0 0 0 1 0  %limit on Phi
     ];
   
-ang_lim = 4*pi/180;
+ang_lim = 10*pi/180;
 cl = [clRect; 
       -ang_lim; 
       -ang_lim
@@ -119,41 +123,21 @@ ch = [chRect;
       ang_lim
      ];
   
-E = [ 1       , 0       , 0 ,  0;   % -1 < u_x < 1
-      0       , 1       , 0 ,  0;   % -1 < u_y < 1
-      x_MPC(2), 0       , -1,  0;   % x_dot * u_x < gamma_x
-      0       , 0       , -1,  0;   % 0 < gamma_x
-      0       , x_MPC(4), 0 , -1;   % y_dot * u_y < gamma_y
-      0       , 0       , 0 , -1    % 0 < gamma_y
+E = [ 1       , 0;   % -1 < u_x < 1
+      0       , 1;   % -1 < u_y < 1
     ];
   
 ul = [-1; 
       -1
      ];
 uh = [ 1;  
-       1; 
-       0; 
-       0;
-       0;
-       0
+       1
      ];
 
 [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
 
 % Compute trajectory constraints matrices and vector
 [DD,EE,bb] = genTrajectoryConstraints(Dt,Et,bt,N);
-
-
-%add constraint on sum of gammas
-DD = [ DD; zeros(1, size(DD,2)) ];
-tmp_row = zeros(1, size(EE,2));
-for i=3:length(u):size(EE,2)
-    tmp_row(1, i) = 1;
-    tmp_row(1, i+1) = 1;
-end
-EE = [ EE; - tmp_row ]; % sum of gammas > work limit
-
-bb = [bb; - param.Wmax * N / param.Tf];
 
 % Compute QP constraint matrices
 [Gamma,Phi] = genPrediction(A,B,N);
@@ -169,7 +153,7 @@ bb = [bb; - param.Wmax * N / param.Tf];
 
 % Run a linear simulation to test your genMPController function
 %u = genMPController(Linv,G,F,bb,J,L,x_MPC,r,length(u));
-u = genMPController(H,G,F,bb,J,L,x_MPC,r,length(u),N,Phi,Gamma);
+u = genMPController(H,G,F,bb,J,L,x_MPC,r,u_len,N,Phi,Gamma);
 
 
 u = u(1:2);
@@ -281,11 +265,11 @@ function u = genMPController(H,G,F,bb,J,L,x,xTarget,m,N,Phi,Gamma)
 % Please read the documentation on mpcActiveSetSolver to understand how it is
 % suppose to be used. Use iA and iA1 to pass the active inequality vector 
 
-opt.MaxIterations = 200;
-opt.IntegrityChecks = false;%% for code generation
-opt.ConstraintTolerance = 1e-3;
-opt.DataType = 'double';
-opt.UseHessianAsInput = false;
+% opt.MaxIterations = 200;
+% opt.IntegrityChecks = false;%% for code generation
+% opt.ConstraintTolerance = 1e-3;
+% opt.DataType = 'double';
+% opt.UseHessianAsInput = false;
 %% your code starts here
 linTerm = G * (x - xTarget);
 if size(J,1) == 0
@@ -303,6 +287,11 @@ persistent u0
 if isempty(u0)
     u0 = zeros(m*N,1);
 end
+diff = length(u0) - m*N;
+if diff ~= 0
+    u0 = u0(1+diff:end);
+end
+
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
 options = optimoptions('quadprog', 'Algorithm', 'active-set', 'Display', 'off')
 U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options);
@@ -312,7 +301,6 @@ U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options
 %U = fmincon(objFunc, u0, F, rightIneqConstr, [], [], [], [], nonl, options);
 %% your remaining code here
 u = U(1:2);
-
 u0 = U;
 end
 
@@ -408,17 +396,3 @@ G = (extendedGamma'*bigQ'*extendedPhi) * 2;
 
 end
 
-function [c,ceq] = workConstr(u, x0, N, Phi, Gamma)
-    n_states = length(x0);
-    extrXDot = kron(eye(N), [0 1 0 0 0 0 0 0]);
-    extrYDot = kron(eye(N), [0 0 0 1 0 0 0 0]);
-    extrUx =      kron(eye(N), [1 0 0 0]);
-    extrUy =      kron(eye(N), [0 1 0 0]);
-    extrLambdaX = kron(eye(N), [0 0 1 0]);
-    extrLambdaY = kron(eye(N), [0 0 0 1]);
-    x_wave = [eye(N*n_states), zeros(N*n_states, n_states)] * ([eye(size(Phi,2)); Phi] * x0 + [zeros(n_states,size(Gamma,2)); Gamma] * u);
-    c = [ (extrXDot * x_wave) .* (extrUx * u) - extrLambdaX * u;
-          (extrYDot * x_wave) .* (extrUy * u) - extrLambdaY * u ];
-    c = [];
-    ceq = [];
-end
