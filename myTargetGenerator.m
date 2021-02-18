@@ -6,9 +6,29 @@ function r = myTargetGenerator(x_hat, param)
 % there.
 r = zeros(8,1);
 
-% Make the crane go to (xTar, yTar)
-r(1,1) = param.xTar;
-r(3,1) = param.yTar;
+% current time
+persistent t
+if isempty(t)
+    t = 0;
+else
+    t = t + param.Ts;
+end
+
+% initial x
+persistent x_initial
+if isempty(x_initial)
+    x_initial = x_hat;
+end
+
+if t + param.samples_max * param.Ts > param.Tf
+    % Make the crane go to (xTar, yTar)
+    r(1,1) = param.xTar;
+    r(3,1) = param.yTar;
+else
+    ratio = (t + param.samples_max * param.Ts) / (param.advance * param.Tf);
+    r(1,1) = x_initial(1) + ratio * (param.xTar - x_initial(1))
+    r(3,1) = x_initial(3) + ratio * (param.yTar - x_initial(3))
+end
 
 end % End of myTargetGenerator
 

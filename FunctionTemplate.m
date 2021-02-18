@@ -18,6 +18,13 @@ param.Ts = 0.05;
 param.xTar = shape.target(1);
 param.yTar = shape.target(2);
 
+% Set minimum and maximumm horizon length
+param.samples_max = 20;
+param.samples_min = 10;
+
+% Advance settling time by multiplying Ts by a factor
+param.advance = 0.99;
+
 % Load model parameters and calculate matrices
 load('Crane_NominalParameters.mat');
 [param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
@@ -37,9 +44,29 @@ function r = myTargetGenerator(x_hat, param)
 % there.
 r = zeros(8,1);
 
-% Make the crane go to (xTar, yTar)
-r(1,1) = param.xTar;
-r(3,1) = param.yTar;
+% current time
+persistent t
+if isempty(t)
+    t = 0;
+else
+    t = t + param.Ts;
+end
+
+% initial x
+persistent x_initial
+if isempty(x_initial)
+    x_initial = x_hat;
+end
+
+if t + param.samples_max * param.Ts > param.Tf
+    % Make the crane go to (xTar, yTar)
+    r(1,1) = param.xTar;
+    r(3,1) = param.yTar;
+else
+    ratio = (t + param.samples_max * param.Ts) / (param.advance * param.Tf);
+    r(1,1) = x_initial(1) + ratio * (param.xTar - x_initial(1))
+    r(3,1) = x_initial(3) + ratio * (param.yTar - x_initial(3))
+end
 
 end % End of myTargetGenerator
 
@@ -80,11 +107,20 @@ else
     t = t + param.Ts;
 end
 
+% initial x
+persistent x_initial
+if isempty(x_initial)
+    x_initial = x_hat;
+end
+
 %convert state to MPC's format
 x_MPC = x_hat(1:8);
 
 %horizon length
-N = max(1,floor((0.99*param.Tf-t)/param.Ts));
+time_settle = param.advance*param.Tf;
+time_left = time_settle - t;
+samples_left = floor(time_left/param.Ts);
+N = min(param.samples_max, max(param.samples_min, samples_left));
 
 %Declare penalty matrices: 
 %lambda = 1e3; %coefficient of work soft constraint
@@ -143,12 +179,28 @@ uh = [ 1;
 % Compute trajectory constraints matrices and vector
 [DD,EE,bb] = genTrajectoryConstraints(Dt,Et,bt,N);
 
-DD = [DD; [zeros(16,8*(N-1)), [eye(8); -eye(8)]]];
-EE = [EE; zeros(16,size(EE,2))];
-bb = [bb; 
-      r(1:8) + param.tolerances.state(1:8)./2; 
-      param.tolerances.state(1:8)./2 - r(1:8);
-     ];
+% Add temporary target constraints
+
+if t + param.samples_max * param.Ts > param.Tf
+    DD = [DD; [zeros(16,8*(N-1)), [eye(8); -eye(8)]]];
+    EE = [EE; zeros(16,size(EE,2))];
+    bb = [bb; 
+          r(1:8) + param.tolerances.state(1:8)./2; 
+          param.tolerances.state(1:8)./2 - r(1:8);
+         ];
+else
+    selectPos = [ 1 0 0 0 0 0 0 0;
+                  0 0 1 0 0 0 0 0 ];
+    DD = [DD; [zeros(4,8*(N-1)), [selectPos; -selectPos]]];
+    EE = [EE; zeros(4,size(EE,2))];
+    bb = [bb; 
+          r(1) + param.tolerances.state(1)/2; 
+          r(3) + param.tolerances.state(3)/2; 
+          param.tolerances.state(1)/2 - r(1);
+          param.tolerances.state(3)/2 - r(3)
+         ];
+end
+
 
 % Compute QP constraint matrices
 [Gamma,Phi] = genPrediction(A,B,N);

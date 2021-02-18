@@ -18,6 +18,13 @@ param.Ts = 0.05;
 param.xTar = shape.target(1);
 param.yTar = shape.target(2);
 
+% Set minimum and maximumm horizon length
+param.samples_max = 20;
+param.samples_min = 10;
+
+% Advance settling time by multiplying Ts by a factor
+param.advance = 0.99;
+
 % Load model parameters and calculate matrices
 load('Crane_NominalParameters.mat');
 [param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
