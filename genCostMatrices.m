@@ -16,3 +16,4 @@ extendedPhi = [eye(size(Phi,2)); Phi];
 G = (extendedGamma'*bigQ'*extendedPhi) * 2;
 
 end
+

@@ -68,7 +68,8 @@ function u = myMPController(r, x_hat, param)
 
 %% Do not delete this line
 % Create the output array of the appropriate size
-u = zeros(4,1);
+u_len = 4;
+u = zeros(u_len,1);
 %
 
 %convert state to MPC's format
@@ -78,17 +79,21 @@ x_MPC = x_hat(1:8);
 N = 25;
 
 %Declare penalty matrices: 
-lambda = 1e15; %coefficient of work soft constraint
+lambda = 1e3; %coefficient of work soft constraint
 
-if abs(x_MPC - r(1:8)) > param.tolerances.state(1:8)
-P = diag([1,1,1,1,0,0,0,0]);
-Q = diag([0,0,0,0,0,0,0,0]);
-R = diag([0;0;lambda;lambda]);
-else
+% if abs(x_MPC - r(1:8)) > param.tolerances.state(1:8)
+% P = diag([1,1,1,1,1,1,1,1]);
+% Q = diag([0,0,0,0,0,0,0,0]);
+% R = diag([0;0;lambda;lambda]);
+% else
+% P = diag([1,1,1,1,1,1,1,1]);
+% Q = diag([1,1,1,1,1,1,1,1]);
+% R = diag([0;0;lambda;lambda]);
+% end
+
 P = diag([1,1,1,1,1,1,1,1]);
 Q = diag([1,1,1,1,1,1,1,1]);
 R = diag([0;0;lambda;lambda]);
-end
 
 A = param.A;
 B = [param.B, zeros(8,length(u)-2)];
@@ -96,27 +101,42 @@ C = param.C;
 
 % Constraints 
 [DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
-D = [];
 
 % rectangle constraints
 D = [ DRect(1,1) 0 DRect(1,2) 0 0 0 0 0; 
       DRect(2,1) 0 DRect(2,2) 0 0 0 0 0; 
       0          0 0          0 1 0 0 0; %limit on Theta
-      0          0 0          0 0 0 1 0 ]; %limit on Phi
+      0          0 0          0 0 0 1 0  %limit on Phi
+    ];
   
 ang_lim = 4*pi/180;
-cl = [clRect; -ang_lim; -ang_lim];
-ch = [chRect; ang_lim; ang_lim];
+cl = [clRect; 
+      -ang_lim; 
+      -ang_lim
+     ];
+ch = [chRect; 
+      ang_lim; 
+      ang_lim
+     ];
   
 E = [ 1       , 0       , 0 ,  0;   % -1 < u_x < 1
       0       , 1       , 0 ,  0;   % -1 < u_y < 1
-      %x_hat(2), 0       , -1,  0;   % x_dot * u_x < gamma_x
+      x_MPC(2), 0       , -1,  0;   % x_dot * u_x < gamma_x
       0       , 0       , -1,  0;   % 0 < gamma_x
-      %0       , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
-      0       , 0       , 0 , -1 ]; % 0 < gamma_y
+      0       , x_MPC(4), 0 , -1;   % y_dot * u_y < gamma_y
+      0       , 0       , 0 , -1    % 0 < gamma_y
+    ];
   
-ul = [-1; -1];
-uh = [ 1;  1; 0; 0];%; 0; 0];
+ul = [-1; 
+      -1
+     ];
+uh = [ 1;  
+       1; 
+       0; 
+       0;
+       0;
+       0
+     ];
 
 [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
 
@@ -127,9 +147,9 @@ uh = [ 1;  1; 0; 0];%; 0; 0];
 %add constraint on sum of gammas
 DD = [ DD; zeros(1, size(DD,2)) ];
 tmp_row = zeros(1, size(EE,2));
-for i=3:length(uh):size(EE,2)
-    tmp_row(i) = 1;
-    tmp_row(i + 1) = 1;
+for i=3:length(u):size(EE,2)
+    tmp_row(1, i) = 1;
+    tmp_row(1, i+1) = 1;
 end
 EE = [ EE; - tmp_row ]; % sum of gammas > work limit
 
@@ -137,7 +157,7 @@ bb = [bb; - param.Wmax * N / param.Tf];
 
 % Compute QP constraint matrices
 [Gamma,Phi] = genPrediction(A,B,N);
-[F,J,L]=genConstraintMatrices(DD,EE,Gamma,Phi,N,5);
+[F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N,5);
 
 % Compute QP cost matrices
 [H,G] = genCostMatrices(Gamma,Phi,Q,R,P,N);
@@ -149,7 +169,7 @@ bb = [bb; - param.Wmax * N / param.Tf];
 
 % Run a linear simulation to test your genMPController function
 %u = genMPController(Linv,G,F,bb,J,L,x_MPC,r,length(u));
-u = genMPController(H,G,F,bb,J,L,x_MPC,r,length(u),N);
+u = genMPController(H,G,F,bb,J,L,x_MPC,r,length(u),N,Phi,Gamma);
 
 
 u = u(1:2);
@@ -242,7 +262,7 @@ end
 
 
 
-function u = genMPController(H,G,F,bb,J,L,x,xTarget,m,N)
+function u = genMPController(H,G,F,bb,J,L,x,xTarget,m,N,Phi,Gamma)
 % H       - quadratic term in the cost function (Linv if using mpcActiveSetSolver).
 % G       - matrix in the linear term in the cost function.
 % F       - LHS of the inequalities term.
@@ -261,32 +281,38 @@ function u = genMPController(H,G,F,bb,J,L,x,xTarget,m,N)
 % Please read the documentation on mpcActiveSetSolver to understand how it is
 % suppose to be used. Use iA and iA1 to pass the active inequality vector 
 
-%opt.MaxIterations = 200;
-%opt.IntegrityChecks = false;%% for code generation
-%opt.ConstraintTolerance = 1e-3;
-%opt.DataType = 'double';
-%opt.UseHessianAsInput = false;
+opt.MaxIterations = 200;
+opt.IntegrityChecks = false;%% for code generation
+opt.ConstraintTolerance = 1e-3;
+opt.DataType = 'double';
+opt.UseHessianAsInput = false;
 %% your code starts here
 linTerm = G * (x - xTarget);
-rightIneqConstr = bb + J*x + L*xTarget;
-%persistent iA
-%if isempty(iA)
-%    iA = 
-%end
-%[U,~,iA,~] = mpcActiveSetSolver(H, linTerm, F, rightIneqConstr, [], zeros(0,1), false(size(bb)), opt);
-
+if size(J,1) == 0
+    rightIneqConstr = [];
+else
+    rightIneqConstr = bb + J*x + L*xTarget;
+end
+% persistent iA
+% if isempty(iA)
+%    iA = [];
+% end
+% [U,~,iA,~] = mpcActiveSetSolver(H, linTerm, F, rightIneqConstr, [], zeros(0,1), iA, opt);
+% 
 persistent u0
 if isempty(u0)
     u0 = zeros(m*N,1);
 end
 %options =  optimset('Display', 'on','UseHessianAsInput','False');
-%options = optimoptions('quadprog', 'Algorithm', 'active-set')
-%U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options);
-objFunc = @(u) 0.5 * u' * H * u + linTerm' * G;
-nonl = 
-U = fmincon(objFunc, u0, F, rightIneqConstr, [], [], [], [], nonl)
+options = optimoptions('quadprog', 'Algorithm', 'active-set', 'Display', 'off')
+U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options);
+%objFunc = @(u) 0.5*u'*H*u + linTerm'*u;
+%nonl = @(u) workConstr(u, x, N, Phi, Gamma);
+%options = optimoptions('fmincon', 'Algorithm', 'interior-point')
+%U = fmincon(objFunc, u0, F, rightIneqConstr, [], [], [], [], nonl, options);
 %% your remaining code here
 u = U(1:2);
+
 u0 = U;
 end
 
@@ -294,12 +320,17 @@ end
 
 function [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh) 
 %modified version, the input constraints are now ul <= Eu <= uh
-    Dt = [D*A; -D*A; zeros(length(uh) + length(ul),size(A,2))];
     lower = zeros(length(ul), size(E,2));
+    if size(D,1) == 0
+        Dt = [zeros(length(uh) + length(ul),size(A,2))];
+        Et = [E; lower];
+    else
+        Dt = [D*A; -D*A; zeros(length(uh) + length(ul),size(A,2))];
+        Et = [D*B; -D*B; E; lower];
+    end
     for i=1:length(ul)
         lower(i,i) = -1;
     end
-    Et = [D*B; -D*B; E; lower];
     bt = [ch; -cl; uh; -ul];
 end
 
@@ -342,11 +373,17 @@ function [F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N,u_size)
 % your code goes here
 n_states = size(DD,2) / N;
 
-a = [eye(N*n_states), zeros(N*n_states, n_states)];
-b = [zeros(n_states,size(Gamma,2)); Gamma];
-F = EE + DD * a * b;
-J = - DD * [eye(N * n_states), zeros(N*n_states, n_states)] * [eye(size(Phi,2)); Phi];
-L =  - DD * kron(ones(N,1), eye(n_states)) - J;
+if size(EE,1) == 0
+    F = [];
+    J = [];
+    L = [];
+else
+    a = [eye(N*n_states), zeros(N*n_states, n_states)];
+    b = [zeros(n_states,size(Gamma,2)); Gamma];
+    F = EE + DD * a * b;
+    J = - DD * [eye(N * n_states), zeros(N*n_states, n_states)] * [eye(size(Phi,2)); Phi];
+    L =  - DD * kron(ones(N,1), eye(n_states)) - J;
+end
 
 end
 
@@ -371,4 +408,17 @@ G = (extendedGamma'*bigQ'*extendedPhi) * 2;
 
 end
 
-function [c,ceq] = workCon()
+function [c,ceq] = workConstr(u, x0, N, Phi, Gamma)
+    n_states = length(x0);
+    extrXDot = kron(eye(N), [0 1 0 0 0 0 0 0]);
+    extrYDot = kron(eye(N), [0 0 0 1 0 0 0 0]);
+    extrUx =      kron(eye(N), [1 0 0 0]);
+    extrUy =      kron(eye(N), [0 1 0 0]);
+    extrLambdaX = kron(eye(N), [0 0 1 0]);
+    extrLambdaY = kron(eye(N), [0 0 0 1]);
+    x_wave = [eye(N*n_states), zeros(N*n_states, n_states)] * ([eye(size(Phi,2)); Phi] * x0 + [zeros(n_states,size(Gamma,2)); Gamma] * u);
+    c = [ (extrXDot * x_wave) .* (extrUx * u) - extrLambdaX * u;
+          (extrYDot * x_wave) .* (extrUy * u) - extrLambdaY * u ];
+    c = [];
+    ceq = [];
+end
