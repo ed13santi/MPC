@@ -11,27 +11,31 @@ persistent t
 if isempty(t)
     t = 0;
 else
-    t = t + (0.85*param.Ts);
+    t = t + param.Ts;
 end
 
 %convert state to MPC's format
 x_MPC = x_hat(1:8);
 
 %horizon length
-N = max(1,floor((param.Tf-t)/param.Ts));
+N = max(1,floor(0.85*(param.Tf-t)/param.Ts));
 
 %Declare penalty matrices: 
-lambda = 1e3; %coefficient of work soft constraint
+%lambda = 1e3; %coefficient of work soft constraint
 
-if abs(x_MPC - r(1:8)) > param.tolerances.state(1:8)s
-    P = diag([1,1,1,1,1,1,1,1]);
+% if abs(x_MPC - r(1:8)) > param.tolerances.state(1:8);
+%     P = diag([1,1,1,1,1,1,1,1]);
+%     Q = diag([0,0,0,0,0,0,0,0]);
+%     R = diag([0.001,0.001]);
+% else %when inside the target area
+%     P = diag([1,1,1,1,1,1,1,1]);
+%     Q = diag([1,1,1,1,1,1,1,1]);
+%     R = diag([1,1]);
+% end
+
+P = diag([1,1,1,1,1,1,1,1]);
     Q = diag([0,0,0,0,0,0,0,0]);
-    R = diag([0.001;0.001]);
-else %when inside the target area
-    P = diag([1,1,1,1,1,1,1,1]);
-    Q = diag([1,1,1,1,1,1,1,1]);
-    R = diag([1;1]);
-end
+    R = diag([0.001,0.001]);
 
 A = param.A;
 B = [param.B, zeros(8,length(u)-2)];
@@ -72,6 +76,10 @@ uh = [ 1;
 
 % Compute trajectory constraints matrices and vector
 [DD,EE,bb] = genTrajectoryConstraints(Dt,Et,bt,N);
+
+% DD = [DD; [zeros(16,8*(N-1)), [eye(8); -eye(8)]]];
+% EE = [EE; zeros(16,size(EE,2))];
+% bb = [bb; param.tolerances.state(1:8); param.tolerances.state(1:8)];
 
 % Compute QP constraint matrices
 [Gamma,Phi] = genPrediction(A,B,N);
