@@ -101,7 +101,7 @@ D = [];
 
 % rectangle constraints
 D = [D; [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]]; 
-D = [D; [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]]; 
+D = [D; [DRect(2,1) 0 DRect(2,2) 0 0 0 0 0]]; 
 
 D = [D; [0 0 0 0 1 0 0 0]]; %limit on Theta
 D = [D; [0 0 0 0 0 0 1 0]]; %limit on Phi
