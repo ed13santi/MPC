@@ -30,13 +30,14 @@ if t_target >= t_reach
     r(3,1) = param.yTar;
 else
     ratio = t_target / t_reach;
-    r(1,1) = x_initial(1) + ratio * delta_x
-    r(3,1) = x_initial(3) + ratio * delta_y
+    r(1,1) = x_initial(1) + ratio * delta_x;
+    r(3,1) = x_initial(3) + ratio * delta_y;
 end
 
 end % End of myTargetGenerator
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-
+%% Modify the following function for your state estimator (if desired)

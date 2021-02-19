@@ -1,6 +1,5 @@
 function [ param ] = mySetup(shape)
-%% Modify the following function for your setup function
-
+    
 % Copy course parameters
 param.constraints = shape.constraints;
 param.tolerances = shape.tolerances; 
@@ -33,12 +32,12 @@ param.R = eye(2);
 % Load model parameters and calculate matrices
 load('Crane_NominalParameters.mat');
 param.rope_len = r;
-[param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
+[param.A,param.B,param.C,~] = genModel(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
 
 end % End of mySetup
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-
-
+%% Modify the following function for your target generation

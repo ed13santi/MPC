@@ -23,7 +23,7 @@ param.samples_max = 20;
 param.samples_min = 10;
 
 % Advance settling time by multiplying Ts by a factor
-param.advance = 0.9;
+param.advance = 0.5;
 
 % Cost matrices
 param.P = zeros(8);
@@ -65,7 +65,7 @@ if isempty(x_initial)
 end
 
 t_target = t + param.samples_max * param.Ts;
-t_reach = param.advance * param.Tf;
+t_reach = param.Tf - param.advance;
 delta_x = param.xTar - x_initial(1);
 delta_y = param.yTar - x_initial(3);
 if t_target >= t_reach
@@ -74,8 +74,8 @@ if t_target >= t_reach
     r(3,1) = param.yTar;
 else
     ratio = t_target / t_reach;
-    r(1,1) = x_initial(1) + ratio * delta_x
-    r(3,1) = x_initial(3) + ratio * delta_y
+    r(1,1) = x_initial(1) + ratio * delta_x;
+    r(3,1) = x_initial(3) + ratio * delta_y;
 end
 
 end % End of myTargetGenerator
@@ -129,18 +129,12 @@ end
 x_MPC = x_hat(1:8);
 
 %horizon length
-time_settle = param.advance*param.Tf;
+time_settle = param.Tf - param.advance;
 time_left = time_settle - t;
 samples_left = floor(time_left/param.Ts);
 N = min(param.samples_max, max(param.samples_min, samples_left));
 
 [P,Q,R,A,B,C] = retrieveMatrices(param);
-
-% modify cost matrices after reach destination
-% if t > param.advance * param.Ts
-%     Q = eye(8);
-%     P = eye(8);
-% end
 
 % Constraints 
 [DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
@@ -167,8 +161,8 @@ ch = [chRect;
      ];
  
   
-E = [ 1       , 0;   % -1 < u_x < 1
-      0       , 1;   % -1 < u_y < 1
+E = [ 1       , 0;  % -1 < u_x < 1
+      0       , 1   % -1 < u_y < 1
     ];
   
 ul = [-1; 
@@ -179,6 +173,8 @@ uh = [ 1;
      ];
 
 [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
+
+n_constr = size(Dt,1);
 
 % Compute trajectory constraints matrices and vector
 [DD,EE,bb] = genTrajectoryConstraints(Dt,Et,bt,N);
@@ -207,19 +203,13 @@ end
 
 % Compute QP constraint matrices
 [Gamma,Phi] = genPrediction(A,B,N);
-[F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N,u_len);
+[F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N);
 
 % Compute QP cost matrices
 [H,G] = genCostMatrices(Gamma,Phi,Q,R,P,N);
 
-% Prepare cost and constraint matrices for mpcActiveSetSolver
-% See doc for mpcActiveSetSolver
-% [Lchol,p] = chol(H,'lower');
-% Linv = linsolve(Lchol,eye(size(Lchol)),struct('LT',true));
-
-% Run a linear simulation to test your genMPController function
-%u = genMPController(Linv,G,F,bb,J,L,x_MPC,r,length(u));
-u = genMPController(H,G,F,bb,J,L,x_MPC,r,u_len,N,Phi,Gamma);
+% optimisation
+u = genMPController(H,G,F,bb,J,L,x_MPC,r,u_len,N,Phi,Gamma,n_constr);
 
 
 u = u(1:2);
@@ -291,6 +281,7 @@ function out = linePars(a,b)
     end
 end
 
+
 function [mat, ch, cl] = rectConstraints(rect)
     A = rect(1,:);
     B = rect(2,:);
@@ -312,60 +303,41 @@ end
 
 
 
-function u = genMPController(H,G,F,bb,J,L,x,xTarget,m,N,Phi,Gamma)
-% H       - quadratic term in the cost function (Linv if using mpcActiveSetSolver).
-% G       - matrix in the linear term in the cost function.
-% F       - LHS of the inequalities term.
-% bb      - RHS of the inequalities term.
-% J       - RHS of inequalities term.
-% L       - RHS of inequalities term. Use this to shift constraints around target point
-% x       - current state
-% xTarget - target equilibrium point.
-% m       - Number of inputs.
-% iA      - active inequalities, see doc mpcqpsolver
-%
-% u is the first input vector u_0 in the sequence [u_0; u_1; ...; u_{N-1}]; 
-% In other words, u is the value of the receding horizon control law
-% evaluated with the current state x0 and target xTarget
+function u = genMPController(H,G,F,bb,J,L,x,xTarget,m,N,Phi,Gamma,n_constr)
 
-% Please read the documentation on mpcActiveSetSolver to understand how it is
-% suppose to be used. Use iA and iA1 to pass the active inequality vector 
-
-% opt.MaxIterations = 200;
-% opt.IntegrityChecks = false;%% for code generation
-% opt.ConstraintTolerance = 1e-3;
-% opt.DataType = 'double';
-% opt.UseHessianAsInput = false;
-%% your code starts here
 linTerm = G * (x - xTarget);
 if size(J,1) == 0
     rightIneqConstr = [];
 else
     rightIneqConstr = bb + J*x + L*xTarget;
 end
-% persistent iA
-% if isempty(iA)
-%    iA = [];
-% end
-% [U,~,iA,~] = mpcActiveSetSolver(H, linTerm, F, rightIneqConstr, [], zeros(0,1), iA, opt);
-% 
+
 persistent u0
 if isempty(u0)
     u0 = zeros(m*N,1);
 end
+
 diff = length(u0) - m*N;
 if diff ~= 0
     u0 = u0(1+diff:end);
 end
 
-%options =  optimset('Display', 'on','UseHessianAsInput','False');
-options = optimoptions('quadprog', 'Algorithm', 'active-set', 'Display', 'off');
-U = quadprog(H, linTerm, F, rightIneqConstr, [], zeros(0,1), [], [], u0, options);
-%objFunc = @(u) 0.5*u'*H*u + linTerm'*u;
-%nonl = @(u) workConstr(u, x, N, Phi, Gamma);
-%options = optimoptions('fmincon', 'Algorithm', 'interior-point')
-%U = fmincon(objFunc, u0, F, rightIneqConstr, [], [], [], [], nonl, options);
-%% your remaining code here
+persistent iA
+if isempty(iA)
+   iA = false(size(rightIneqConstr));
+end
+
+opt.MaxIterations = 200;
+opt.IntegrityChecks = false;%% for code generation
+opt.ConstraintTolerance = 1e-3;
+opt.DataType = 'double';
+opt.UseHessianAsInput = true;
+
+[U,~,iA,~] = mpcActiveSetSolver(H, linTerm, F, rightIneqConstr, [], zeros(0,1), iA, opt);
+
+iA = [iA(1+n_constr:end); false(n_constr,1)];
+
+
 u = U(1:2);
 u0 = U;
 end
@@ -417,16 +389,16 @@ Gamma = Gamma(n_states+1:end,1:end);
 end
 
 
-function [F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N,u_size)
+function [F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N)
 
 % your code goes here
 n_states = size(DD,2) / N;
 
 a = [eye(N*n_states), zeros(N*n_states, n_states)];
-    b = [zeros(n_states,size(Gamma,2)); Gamma];
-    F = EE + DD * a * b;
-    J = - DD * [eye(N * n_states), zeros(N*n_states, n_states)] * [eye(size(Phi,2)); Phi];
-    L =  - DD * kron(ones(N,1), eye(n_states)) - J;
+b = [zeros(n_states,size(Gamma,2)); Gamma];
+F = EE + DD * a * b;
+J = - DD * [eye(N * n_states), zeros(N*n_states, n_states)] * [eye(size(Phi,2)); Phi];
+L =  - DD * kron(ones(N,1), eye(n_states)) - J;
 
 end
 
