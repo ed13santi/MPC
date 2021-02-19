@@ -23,7 +23,7 @@ param.samples_max = 20;
 param.samples_min = 10;
 
 % Advance settling time by multiplying Ts by a factor
-param.advance = 0.9;
+param.advance = 0.95;
 
 % Cost matrices
 param.P = zeros(8);
@@ -167,8 +167,8 @@ ch = [chRect;
      ];
  
   
-E = [ 1       , 0;   % -1 < u_x < 1
-      0       , 1;   % -1 < u_y < 1
+E = [ 1       , 0;  % -1 < u_x < 1
+      0       , 1   % -1 < u_y < 1
     ];
   
 ul = [-1; 
@@ -207,7 +207,7 @@ end
 
 % Compute QP constraint matrices
 [Gamma,Phi] = genPrediction(A,B,N);
-[F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N,u_len);
+[F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N);
 
 % Compute QP cost matrices
 [H,G] = genCostMatrices(Gamma,Phi,Q,R,P,N);
@@ -375,13 +375,8 @@ end
 function [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh) 
 %modified version, the input constraints are now ul <= Eu <= uh
     lower = zeros(length(ul), size(E,2));
-    if size(D,1) == 0
-        Dt = [zeros(length(uh) + length(ul),size(A,2))];
-        Et = [E; lower];
-    else
-        Dt = [D*A; -D*A; zeros(length(uh) + length(ul),size(A,2))];
-        Et = [D*B; -D*B; E; lower];
-    end
+    Dt = [D*A; -D*A; zeros(length(uh) + length(ul),size(A,2))];
+    Et = [D*B; -D*B; E; lower];
     for i=1:length(ul)
         lower(i,i) = -1;
     end
@@ -422,22 +417,16 @@ Gamma = Gamma(n_states+1:end,1:end);
 end
 
 
-function [F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N,u_size)
+function [F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N)
 
 % your code goes here
 n_states = size(DD,2) / N;
 
-if size(EE,1) == 0
-    F = [];
-    J = [];
-    L = [];
-else
-    a = [eye(N*n_states), zeros(N*n_states, n_states)];
-    b = [zeros(n_states,size(Gamma,2)); Gamma];
-    F = EE + DD * a * b;
-    J = - DD * [eye(N * n_states), zeros(N*n_states, n_states)] * [eye(size(Phi,2)); Phi];
-    L =  - DD * kron(ones(N,1), eye(n_states)) - J;
-end
+a = [eye(N*n_states), zeros(N*n_states, n_states)];
+b = [zeros(n_states,size(Gamma,2)); Gamma];
+F = EE + DD * a * b;
+J = - DD * [eye(N * n_states), zeros(N*n_states, n_states)] * [eye(size(Phi,2)); Phi];
+L =  - DD * kron(ones(N,1), eye(n_states)) - J;
 
 end
 

@@ -123,9 +123,7 @@ if isempty(x_initial)
     x_initial = x_hat;
 end
 
-% modify cost matrices after reach destination
-if t > param.advance * param.Ts
-    P = eye(
+
 
 %convert state to MPC's format
 x_MPC = x_hat(1:8);
@@ -137,6 +135,12 @@ samples_left = floor(time_left/param.Ts);
 N = min(param.samples_max, max(param.samples_min, samples_left));
 
 [P,Q,R,A,B,C] = retrieveMatrices(param);
+
+% modify cost matrices after reach destination
+% if t > param.advance * param.Ts
+%     Q = eye(8);
+%     P = eye(8);
+% end
 
 % Constraints 
 [DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
@@ -371,13 +375,8 @@ end
 function [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh) 
 %modified version, the input constraints are now ul <= Eu <= uh
     lower = zeros(length(ul), size(E,2));
-    if size(D,1) == 0
-        Dt = [zeros(length(uh) + length(ul),size(A,2))];
-        Et = [E; lower];
-    else
-        Dt = [D*A; -D*A; zeros(length(uh) + length(ul),size(A,2))];
-        Et = [D*B; -D*B; E; lower];
-    end
+    Dt = [D*A; -D*A; zeros(length(uh) + length(ul),size(A,2))];
+    Et = [D*B; -D*B; E; lower];
     for i=1:length(ul)
         lower(i,i) = -1;
     end
@@ -423,17 +422,11 @@ function [F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N,u_size)
 % your code goes here
 n_states = size(DD,2) / N;
 
-if size(EE,1) == 0
-    F = [];
-    J = [];
-    L = [];
-else
-    a = [eye(N*n_states), zeros(N*n_states, n_states)];
+a = [eye(N*n_states), zeros(N*n_states, n_states)];
     b = [zeros(n_states,size(Gamma,2)); Gamma];
     F = EE + DD * a * b;
     J = - DD * [eye(N * n_states), zeros(N*n_states, n_states)] * [eye(size(Phi,2)); Phi];
     L =  - DD * kron(ones(N,1), eye(n_states)) - J;
-end
 
 end
 

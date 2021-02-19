@@ -64,8 +64,8 @@ ch = [chRect;
      ];
  
   
-E = [ 1       , 0;   % -1 < u_x < 1
-      0       , 1;   % -1 < u_y < 1
+E = [ 1       , 0;  % -1 < u_x < 1
+      0       , 1   % -1 < u_y < 1
     ];
   
 ul = [-1; 
@@ -104,7 +104,7 @@ end
 
 % Compute QP constraint matrices
 [Gamma,Phi] = genPrediction(A,B,N);
-[F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N,u_len);
+[F,J,L] = genConstraintMatrices(DD,EE,Gamma,Phi,N);
 
 % Compute QP cost matrices
 [H,G] = genCostMatrices(Gamma,Phi,Q,R,P,N);

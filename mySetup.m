@@ -23,7 +23,7 @@ param.samples_max = 20;
 param.samples_min = 10;
 
 % Advance settling time by multiplying Ts by a factor
-param.advance = 0.9;
+param.advance = 0.95;
 
 % Cost matrices
 param.P = zeros(8);
