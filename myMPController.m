@@ -5,7 +5,7 @@ function u = myMPController(r, x_hat, param)
 u = zeros(2,1);
 %
 
-% horizon length
+% horizon length (prediction AND control)
 N = param.N;
 
 % objective function (w contains N+1 x vectors and N u vectors)
@@ -23,26 +23,19 @@ else
 end
 
 % linear inequality constraint
-A = [];
-b = [];
+[A, b] = inequalityConstraints(N, param.craneParams.r, param.tolerances.state(1:8));
 
 % linear equality constraints (currently only equality constraint on x0)
-Aeq = leftEquality(N);
-beq = rightEquality(N, x_hat(1:8), param.craneParams.r);
+[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, N, param.craneParams.r, param.Ts);
 
 % non-linear constraints
-nonlcon = @(w) nonLinearConstraints(param.Ts, param.craneParams, w);
-
-% lower and upper bounds
-wLen = N*13+10;
-lb = lbConstraint(wLen, r(1:8), param.tolerances.state(1:8));
-ub = ubConstraint(wLen, r(1:8), param.tolerances.state(1:8));
+% nonlcon = @(w) nonLinearConstraints(param.Ts, param.craneParams, w);
 
 % options
-options = optimoptions(@fmincon);
+% options = optimoptions(@fmincon);
 
 % optimisation
-w = fmincon(objFunc,w0,A,b,Aeq,beq,lb,ub,nonlcon,options);
+w = fmincon(objFunc,w0,A,b,Aeq,beq);
 
 % extract u from w
 u = w(11:12);

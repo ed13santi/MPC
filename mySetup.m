@@ -27,6 +27,10 @@ param.advance = 0.95;
 % Load model parameters and calculate matrices
 param.craneParams = load('Crane_NominalParameters.mat');
 
+% Create generic state space that can be used at every time step using the
+% current values of x and u
+[param.genericA param.genericB] = obtainJacs(param.craneParams);
+
 end % End of mySetup
 
 

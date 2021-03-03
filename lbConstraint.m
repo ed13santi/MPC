@@ -5,3 +5,5 @@ function lb = lbConstraint(w_len, r, tolerances)
     end
     lb(w_len-9:w_len-2) = r - tolerances; % final position constraints
 end
+
+%% model linearisation
