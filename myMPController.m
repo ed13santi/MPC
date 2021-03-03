@@ -15,8 +15,11 @@ objFunc = @(w) objFuncN(w, N);
 persistent w0
 if isempty(w0)
     w0 = zeros(13*N+10, 1);
+    for i=9:13:13*N+10
+       w0(i,1) = param.craneParams.r; 
+    end
 else
-    w0(1:13*N) = w0(11:13*N+10);
+    w0(1:13*N-3) = w0(14:13*N+10);
 end
 
 % linear inequality constraint

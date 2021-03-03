@@ -105,8 +105,11 @@ objFunc = @(w) objFuncN(w, N);
 persistent w0
 if isempty(w0)
     w0 = zeros(13*N+10, 1);
+    for i=9:13:13*N+10
+       w0(i,1) = param.craneParams.r; 
+    end
 else
-    w0(1:13*N) = w0(11:13*N+10);
+    w0(1:13*N-3) = w0(14:13*N+10);
 end
 
 % linear inequality constraint
@@ -155,8 +158,8 @@ function out = workOfStep(xuxVec)
     x = xuxVec(1:10);
     u = xuxVec(11:13);
     x_next = xuxVec(14:23);
-    workX = max(0, u(1) * (x(2) + x_next(2))) / 2; % /2 is not really needed
-    workY = max(0, u(2) * (x(4) + x_next(4))) / 2; % /2 is not really needed
+    workX = max(0, u(1) * (x(2) + x_next(2)));                              % *Ts/2 is not needed
+    workY = max(0, u(2) * (x(4) + x_next(4)));                              % *Ts/2 is not needed because minimisation is equivalent
     out = workX + workY;
 end
 
@@ -202,13 +205,13 @@ function u = w2u(w)
     end
 end
 
-function x = doStep(x_wave, u, dt, craneParams) %why 3 u inputs???
+function x = doStep(x_wave, u, dt, craneParams) 
     x = x_wave;
     for i = 1:length(x_wave)/10
         x_before = x_wave(i*10-9:i*10);
-        odeFun = @(t,y) crane_nl_model_student([u(i*3-2:i*3)], y, craneParams);
+        odeFun = @(t,y) crane_nl_model_student(u(i*3-2:i*3), y, craneParams);
         [~, y] = ode45(odeFun, [0 dt], x_before);
-        x(i*10-9:i*10) = y(1);
+        x(i*10-9:i*10) = y(end,:);
     end
 end
 
