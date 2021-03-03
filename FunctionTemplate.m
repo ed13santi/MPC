@@ -18,9 +18,14 @@ param.Ts = 0.05;
 param.xTar = shape.target(1);
 param.yTar = shape.target(2);
 
+% Horizon length
+param.N = 15;
+
+% How much before Ts to contraint final position
+param.advance = 0.95;
+
 % Load model parameters and calculate matrices
-load('Crane_NominalParameters.mat');
-[param.A,param.B,param.C,~] = genCraneODE(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
+param.craneParams = load('Crane_NominalParameters.mat');
 
 end % End of mySetup
 
@@ -32,14 +37,33 @@ end % End of mySetup
 function r = myTargetGenerator(x_hat, param)
 %% Modify the following function for your target generation
 
-% Create the output array of the appropriate size. This vector is passed
-% into myMPController, so its size must match what is expected by the code
-% there.
-r = zeros(8,1);
+persistent t
+if isempty(t)
+    t = 0;
+else
+    t = t + param.Ts;
+end
 
-% Make the crane go to (xTar, yTar)
-r(1,1) = param.xTar;
-r(3,1) = param.yTar;
+% initial x
+persistent x_initial
+if isempty(x_initial)
+    x_initial = x_hat;
+end
+
+t_target = t + param.N * param.Ts;
+t_reach = param.advance * param.Tf;
+delta_x = param.xTar - x_initial(1);
+delta_y = param.yTar - x_initial(3);
+r = zeros(8,1);
+if t_target >= t_reach
+    % Make the crane go to (xTar, yTar)
+    r(1,1) = param.xTar;
+    r(3,1) = param.yTar;
+else
+    ratio = t_target / t_reach;
+    r(1,1) = x_initial(1) + ratio * delta_x;
+    r(3,1) = x_initial(3) + ratio * delta_y;
+end
 
 end % End of myTargetGenerator
 
@@ -68,111 +92,47 @@ function u = myMPController(r, x_hat, param)
 
 %% Do not delete this line
 % Create the output array of the appropriate size
-u = zeros(4,1);
+u = zeros(2,1);
 %
 
-%convert state to MPC's format
-x_MPC = x_hat(1:8);
-
 % horizon length
-N = 25;
+N = param.N;
 
-% Declare penalty matrices: 
-eps = 1e-10;
-lambda = 1e15; %coefficient of work soft constraint
-P = 100000 * diag([1,1,1,1,eps,1,eps,1]);
-Q = 100000 * diag([1,1,1,1,eps,eps,eps,eps]);
-R = diag([0.001;0.001;eps;eps]);
+% objective function (w contains N+1 x vectors and N u vectors)
+objFunc = @(w) objFuncN(w, N);
 
-M = blkdiag(Q,R);
-H = blkdiag( kron(eye(N), M), P, lambda );
-
-offsetOneTimeStep = [ - r(1); 0; - r(1); 0; 0; 0; 0; 0; zeros(length(u),1) ];
-offsetMatrix = [ kron(ones(N,1), offsetOneTimeStep);
-                 [ - r(1); 0; - r(1); 0; 0; 0; 0; 0];
-                 0 ];
-f = H' * offsetMatrix;
-
-
-
-% Equality constraints - model physics
-A = param.A;
-B = [param.B, zeros(8,length(u)-2)];
-C = param.C;
-
-step = size(A,1);
-h_step = size(A,2) + size(B,2);
-
-G_top = [eye(step), zeros(step, N * h_step)];
-G_bot = zeros(N * step, N * h_step + step);
-G_block = [-A, -B, eye(8)];
-for i=0:N-1
-    h_start = h_step*i+1;
-    h_end = h_step*(i+1)+step;
-    v_start = step*i+1;
-    v_end = step*(i+1);
-    G_bot(v_start:v_end,h_start:h_end) = G_block;
+% inital guess w0
+persistent w0
+if isempty(w0)
+    w0 = zeros(13*N+10, 1);
+else
+    w0(1:13*N) = w0(11:13*N+10);
 end
-G = [G_top; G_bot];
-G = blkdiag(G, 0);
 
-g = [x_hat; zeros(N * step, 1)];
-g = [g; 0];
+% linear inequality constraint
+A = [];
+b = [];
 
+% linear equality constraints (currently only equality constraint on x0)
+Aeq = leftEquality(N);
+beq = rightEquality(N, x_hat(1:8), param.craneParams.r);
 
+% non-linear constraints
+nonlcon = @(w) nonLinearConstraints(param.Ts, param.craneParams, w);
 
-% Constraints 
-[DRect,chRect,clRect] = rectConstraints(param.constraints.rect);
+% lower and upper bounds
+wLen = N*13+10;
+lb = lbConstraint(wLen, r(1:8), param.tolerances.state(1:8));
+ub = ubConstraint(wLen, r(1:8), param.tolerances.state(1:8));
 
-% rectangle constraints
-D = [ [DRect(1,1) 0 DRect(1,2) 0 0 0 0 0]; 
-      [0 DRect(2,1) 0 DRect(2,2) 0 0 0 0]; 
-      [0 0 0 0 1 0 0 0]; %limit on Theta
-      [0 0 0 0 0 0 1 0] ]; %limit on Phi
+% options
+options = optimoptions(@fmincon);
 
-E = [ 1        , 0       , 0 ,  0;   % -1 < u_x < 1
-      0        , 1       , 0 ,  0;   % -1 < u_y < 1
-      %x_hat(2) , 0       , -1,  0;   % x_dot * u_x < gamma_x
-      0        , 0       , -1,  0;   % 0 < gamma_x
-      %0        , x_hat(4), 0 , -1;   % y_dot * u_y < gamma_y
-      0        , 0       , 0 , -1 ]; % 0 < gamma_y
+% optimisation
+w = fmincon(objFunc,w0,A,b,Aeq,beq,lb,ub,nonlcon,options);
 
-  
-% Compute stage constraint matrices and vector
-ang_lim = 4*pi/180;
-cl = [clRect; -ang_lim; -ang_lim];
-ch = [chRect; ang_lim; ang_lim];
-ul = [-1; -1];
-uh = [1; 1; 0; 0];% 0; 0];
-[Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh);
-
-% Compute non-linear constraints
-
-% Compute trajectory constraints matrices and vector
-[D,d] = genTrajectoryConstraintsSparse(Dt,Et,bt,N);
-
-
-%add constraint on sum of gammas
-tmp_row = zeros(1, size(D,2)+1);
-for i=8+3:8+length(uh):size(D,2)
-    tmp_row(i) = 1;
-    tmp_row(i + 1) = 1;
-end
-tmp_row(1,end) = - 1;
-D = [ D, zeros(size(D,1),1) ];
-D = [ D; - tmp_row ]; % sum of gammas < z work limit
-D = [ D; [zeros(1, size(D,2)-1), -1] ]; % z > z work limit
-
-d = [d; 0; - param.Wmax * N / param.Tf];
-
-% Prepare cost and constraint matrices for mpcActiveSetSolver
-% See doc for mpcActiveSetSolver
-% [Lchol,p] = chol(H,'lower');
-% Linv = linsolve(Lchol,eye(size(Lchol)),struct('LT',true));
-
-% Run a linear simulation to test your genMPController function
-%u = genMPController(Linv,G,F,bb,J,L,x_MPC,r,length(u));
-u = genMPControllerSparse(H,f,G,g,D,d,length(u),N);
+% extract u from w
+u = w(11:12);
 
 end % End of myMPController
 
@@ -182,140 +142,97 @@ end % End of myMPController
 
 
 
-%% OTHER FUNCTIONS
+%% objective function
 
-function [A,B,C,D] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vx,Vy,Ts)
-% Inputs:
-% m = Pendulum mass (kg)
-% M = Cart mass (kg)
-% MR = Rail mass (kg)
-% r = String length (m)
-% g = gravitational accelaration (m*s^-2)
-% Tx = Damping coefficient in X direction (N*s*m^-1)
-% Ty = Damping coefficient in Y direction (N*s*m^-1)
-% Vm = Input multiplier (scalar)
-% Ts = Sample time of the discrete-time system (s)
-% Outputs:
-% A,B,C,D = State Space matrices of a discrete-time or continuous-time state space model
-
-% The motors in use on the gantry crane are identical and therefore Vx=Vy.
-
-% replace A,B,C,D with the correct values
-A=[ 0, 1,             0, 0,        0,                          0, 0,              0;
-    0, -Tx/(M+MR),    0, 0,        g*m/(M+MR),                 0, 0,              0;
-    0, 0,             0, 1,        0,                          0, 0,              0;
-    0, 0,             0, -Ty/M,    0,                          0, g*m/M,          0;
-    0, 0,             0, 0,        0,                          1, 0,              0;
-    0, Tx/(r*(M+MR)), 0, 0,        -(g*(m+M+MR))/(r*(M+MR)),   0, 0,              0;
-    0, 0,             0, 0,        0,                          0, 0,              1;
-    0, 0,             0, Ty/(M*r), 0,                          0, -g*(m+M)/(M*r), 0 ];
-B=[ 0,              0;
-    Vx/(M+MR),      0;
-    0,              0;
-    0,              Vy/M;
-    0,              0;
-    -Vx/(r*(M+MR)), 0; 
-    0,              0; 
-    0,              -Vy/(M*r) ];
-C=eye(8);
-D=zeros(8,2);
-
-% if Ts>0 then sample the model with a zero-order hold (piecewise constant) input, otherwise return a continuous-time model
-if Ts>0
-    sys = ss(A,B,C,D);
-    sysd = c2d(sys, Ts);
-    A = sysd.A;
-    B = sysd.B;
-    C = sysd.C;
-    D = sysd.D;
-end
-
-end
-
-function out = linePars(a,b) 
-    if a(1) == b(1)
-    out = [-1, 0, -a(1)];
-    else
-    tmp = polyfit([a(1) b(1)],[a(2) b(2)],1);
-    out = [-tmp(1) 1 tmp(2)];
+function out = objFuncN(w, N)
+    out = 0;
+    for i = 1:13:N*13
+        out = out + workOfStep(w(i:i+22));
     end
 end
 
-function [mat, ch, cl] = rectConstraints(rect)
-    A = rect(1,:);
-    B = rect(2,:);
-    C = rect(3,:);
-    D = rect(4,:);
-    
-    a1 = linePars(A,D);
-    a2 = linePars(A,B);
-    a3 = linePars(B,C);
-    a4 = linePars(D,C);
-    
-    mat  = [ a1(1) , a1(2);
-             a2(1) , a2(2) ];
-         
-    ch = [ max(a1(3),a3(3)); max(a2(3),a4(3)) ];
-    cl = [ min(a1(3),a3(3)); min(a2(3),a4(3)) ];
+function out = workOfStep(xuxVec)
+    x = xuxVec(1:10);
+    u = xuxVec(11:13);
+    x_next = xuxVec(14:23);
+    workX = max(0, u(1) * (x(2) + x_next(2))) / 2; % /2 is not really needed
+    workY = max(0, u(2) * (x(4) + x_next(4))) / 2; % /2 is not really needed
+    out = workX + workY;
 end
 
 
 
 
-function u = genMPControllerSparse(H,f,G,g,D,d,m,N)
-%opt.MaxIterations = 200;
-%opt.IntegrityChecks = false;%% for code generation
-%opt.ConstraintTolerance = 1e-3;
-%opt.DataType = 'double';
-%opt.UseHessianAsInput = false;
-%% your code starts here
-%persistent iA
-%if isempty(iA)
-%    iA = 
-%end
-%[U,~,iA,~] = mpcActiveSetSolver(H, linTerm, F, rightIneqConstr, [], zeros(0,1), false(size(bb)), opt);
 
-persistent w0
-if isempty(w0)
-    w0 = zeros(m*N+8*(N+1)+1,1);
-end
-%options =  optimset('Display', 'on','UseHessianAsInput','False');
-options = optimoptions('fmincon', 'Algorithm', 'active-set')
-%W = quadprog(H, f, D, d, G, g, [], [], w0, options);
-nonLinConstr = @(w) workConstr(w, m, N);
-func = @(w) 0.5 * w' * H * w + f' * w;
-W = fmincon(func, w0, D, d, G, g, [], [], nonLinConstr, options)
-%% your remaining code here
-u = W(9:10);
-W0 = W;
+%% linear equality constraints
+function Aeq = leftEquality(N)
+    selectLandLDot = [zeros(1,11), 1, 0; 
+                      zeros(1,11), 0, 1];
+    constraintLandLDots = kron(eye(N), selectLandLDot);
+    Aeq = blkdiag(eye(10),constraintLandLDots);
 end
 
-function [Dt,Et,bt] = genStageConstraints(A,B,D,E,cl,ch,ul,uh) 
-%modified version, the input constraints are now ul <= Eu <= uh
-    Dt = [D*A; -D*A; zeros(length(uh) + length(ul),size(A,2))];
-    lower = zeros(length(ul), size(E,2));
-    for i=1:length(ul)
-        lower(i,i) = -1;
+function beq = rightEquality(N, x0, r)
+    LandLDotConstraintSingle = [r;0];
+    LandLDotConstraints = kron(ones(N+1,1), LandLDotConstraintSingle);
+    beq = [x0; LandLDotConstraints];
+end
+
+
+%% non-linear constraints
+
+function x = w2x(w)
+    x = zeros((length(w)-10)/13*10, 1);
+    for i=1:(length(w)-10)/13
+        x(i*10-9:i*10) = w(i*13+1:i*13+10);
     end
-    Et = [D*B; -D*B; E; lower];
-    bt = [ch; -cl; uh; -ul];
 end
 
-function [D,d] = genTrajectoryConstraintsSparse(Dt,Et,bt,N)
-% your code goes here
-block = [Dt, Et];
-D = blkdiag(kron(eye(N), block), Dt);
-d = kron(ones(N+1,1), bt);
+function x = w2x_wave(w)
+    x = zeros((length(w)-10)/13*10, 1);
+    for i=1:(length(w)-10)/13
+        x(i*10-9:i*10) = w(i*13-12:i*13-3);
+    end
 end
 
+function u = w2u(w)
+    u = zeros((length(w)-10)/13*3, 1);
+    for i=1:(length(w)-10)/13
+        u(i*3-2:i*3) = w(i*13-2:i*13);
+    end
+end
 
-function [c,ceq] = workConstr(w, u_len, N)
-    w = w(1:end-8);
+function x = doStep(x_wave, u, dt, craneParams) %why 3 u inputs???
+    x = x_wave;
+    for i = 1:length(x_wave)/10
+        x_before = x_wave(i*10-9:i*10);
+        odeFun = @(t,y) crane_nl_model_student([u(i*3-2:i*3)], y, craneParams);
+        [~, y] = ode45(odeFun, [0 dt], x_before);
+        x(i*10-9:i*10) = y(1);
+    end
+end
+
+function [c, ceq] = nonLinearConstraints(dt, craneParams, w)
     c = [];
-    for i=0:u_len+8:(u_len+8)*(N-1)
-        c = [ c;
-              w(i+2) * w(i+9) - w(i+11);
-              w(i+4) * w(i+10) - w(i+12); ];
+    ceq = w2x(w) - doStep(w2x_wave(w), w2u(w), dt, craneParams);
+end
+
+
+
+
+%% lower and upper bounds
+function ub = ubConstraint(w_len, r, tolerances)
+    ub = Inf * ones(w_len, 1);
+    for i=0:13:w_len-13
+        ub(i+11:i+12) = ones(2,1); % u < 1
     end
-    ceq = [];
+    ub(w_len-9:w_len-2) = r + tolerances; % final position constraints
+end
+
+function lb = lbConstraint(w_len, r, tolerances)
+    lb = - Inf * ones(w_len, 1);
+    for i=0:13:w_len-13
+        lb(i+11:i+12) = - ones(2,1); % u > -1
+    end
+    lb(w_len-9:w_len-2) = r - tolerances; % final position constraints
 end
