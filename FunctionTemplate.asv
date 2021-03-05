@@ -29,7 +29,9 @@ param.craneParams = load('Crane_NominalParameters.mat');
 
 % Create generic state space that can be used at every time step using the
 % current values of x and u
-[param.genericA param.genericB] = obtainJacs(param.craneParams);
+[param.genericA, param.genericB, param.modelDerivative] = obtainJacs(param.craneParams);
+load('Crane_NominalParameters.mat');
+[param.A,param.B,param.C,~] = genModel(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
 
 end % End of mySetup
 
@@ -117,10 +119,11 @@ else
 end
 
 % linear inequality constraint
-[A, b] = inequalityConstraints(N, param.craneParams.r, param.tolerances.state(1:8));
+[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8));
 
 % linear equality constraints (currently only equality constraint on x0)
-[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, N, param.craneParams.r, param.Ts);
+%[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
+[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
 
 % non-linear constraints
 % nonlcon = @(w) nonLinearConstraints(param.Ts, param.craneParams, w);
@@ -130,6 +133,13 @@ end
 
 % optimisation
 w = fmincon(objFunc,w0,A,b,Aeq,beq);
+% H = zeros(size(A,2));
+% for i=1:N
+%     H(i*13-2:i*13-1,i*13-2:i*13-1) = eye(2);
+% end
+% H = sparse(H);
+% options = optimoptions('fmincon','Algorithm','interior-point');
+% w = quadprog(H,zeros(1,size(A,2)),A,b,Aeq,beq);
 
 % extract u from w
 u = w(11:12);
@@ -145,32 +155,45 @@ end % End of myMPController
 %% objective function
 
 function out = objFuncN(w, N)
-    out = 0;
+    vels = zeros(2*(N+1), 1);
+    us = zeros(2*N, 1);
     for i = 1:N
-        out = out + workOfStep(w(i*13-12:i*13+10));
+        vels(2*i-1:2*i, 1) = [w(13*i-11); w(13*i-9)];
+        us(2*i-1:2*i, 1) = [w(13*i-2); w(13*i-1)];
     end
-end
-
-function out = workOfStep(xux)
-    out = max(0, xux(11) * (xux(2) + xux(15))) + max(0, xux(12) * (xux(4) + xux(17)));
-    %out = xux(11) + xux(12);
+    vels(2*(N+1)-1:2*(N+1), 1) = [w(13*(N+1)-11); w(13*(N+1)-9)];
+    
+    vels = vels(3:end,1) + vels(1:end-2,1);
+    prods = us .* vels;
+    maxed = max(prods,[],2);
+    out = sum(maxed);
 end
 
 
 
 
 %% linear inequality constraints
-function [A, b] = inequalityConstraints(N, r, tolerances)
+function [A, b] = inequalityConstraintsHARD(N, r, tolerances)
     A = zeros(4*N+8*2, 10+13*N);
     b = zeros(4*N+8*2, 1);
-    for i=1:N
-        A(4*i-3,13*i-2) =  1; % u < 1
-        A(4*i-2,13*i-1) =  1; % u < 1
-        A(4*i-1,13*i-2) = -1; % u > 1
-        A(4*i  ,13*i-1) = -1; % u > 1
-        b(4*i-3:4*i-2) =  ones(2,1); % u < 1
-        b(4*i-1:4*i  ) = -ones(2,1); % u > 1
-    end
+%     for i=1:N
+%         A(4*i-3,13*i-2) =  1; % u < 1
+%         A(4*i-2,13*i-1) =  1; % u < 1
+%         A(4*i-1,13*i-2) = -1; % u > 1
+%         A(4*i  ,13*i-1) = -1; % u > 1
+%         b(4*i-3:4*i-2) =  ones(2,1); % u < 1
+%         b(4*i-1:4*i  ) = -ones(2,1); % u > 1
+%     end
+    A(end-15:end-8, end-9:end-2) = eye(8);
+    A(end-7:end, end-9:end-2) = -eye(8);
+    b(end-15:end-8) = r + tolerances;
+    b(end-7:end) = tolerances - r;
+end
+
+function [A, b] = inequalityConstraints(N, r, tolerances)
+    A = zeros(8*2, 10+13*N);
+    b = zeros(8*2, 1);
+    
     A(end-15:end-8, end-9:end-2) = eye(8);
     A(end-7:end, end-9:end-2) = -eye(8);
     b(end-15:end-8) = r + tolerances;
@@ -180,38 +203,54 @@ end
 
 
 %% linear equality constraints
-function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, N, r, Ts)
-    xus = [x0; r; 0; w0(11:end-10)];
+function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, radius, Ts)
+    xus = [x0; radius; 0; w0(11:end-10)];
     x = zeros(N*10, 1);
     u = zeros(N*3, 1);
     Aeq = zeros(10+(10+2)*N, length(w0));
     beq = zeros(10+(10+2)*N, 1);
     
     Aeq(1:10,1:10) = eye(10);
-    beq(1:10,:) = [x0; r; 0];
+    beq(1:10,:) = [x0; radius; 0];
     for i=1:N
        x = xus(13*i-12:13*i-3);
        u = xus(13*i-2:13*i);
-       funcInp = [x(1), x(2), x(3), x(4), x(5), x(6), x(7), x(8), r, 0, u(1), u(2), u(3)];
+       funcInp = [x(1), x(2), x(3), x(4), x(5), x(6), x(7), x(8), x(9), x(10), u(1), u(2), u(3)];
        A = genA(funcInp);
        B = genB(funcInp);
-       sys = ss(A,B,eye(10),zeros(10,3));
-       sysd = c2d(sys, Ts);
-       A = sysd.A;
-       B = sysd.B;
-       Aeq(i*12-11:i*12-2, i*13-12:i*13-3) = A; % Ax_k + Bu_k - x_k+1 = b_k
-       Aeq(i*12-11:i*12-2, i*13-2:i*13) = B;
-       Aeq(i*12-11:i*12-2, i*13+1:i*13+10) = - eye(10);
+       Aeq(i*12-11:i*12-2, i*13-12:i*13-3) = eye(length(x)) + Ts*A/2; 
+       Aeq(i*12-11:i*12-2, i*13-2:i*13) = Ts*B;
+       Aeq(i*12-11:i*12-2, i*13+1:i*13+10) = Ts*A/2 - eye(length(x));
        Aeq(i*12-1:i*12, i*13+9:i*13+10) = eye(2); % r and r_dot constraints
-       beq(12*i-11:12*i-2) = A*x - x + B*u; % b (signs reversed cuz on other side of eqn)
-       beq(12*i-1:12*i) = [r; 0]; % r and r_dot constraints
+       beq(12*i-11:12*i-2) = - Ts * (der(funcInp) - A*x - B*u); % b (signs reversed cuz on other side of eqn) MUST USE the continuous A B
+       beq(12*i-1:12*i) = [radius; 0]; % r and r_dot constraints
     end
-    
+end
+
+function [Aeq, beq] = linearConstraintsSimple(A, B, x0, N, r, trgt)
+    Aeq = zeros(10+(10+2)*N, 13*N+10);
+    beq = zeros(10+(10+2)*N, 1);
+        
+    Aeq(1:10,1:10) = eye(10);
+    beq(1:10,:) = [x0; r; 0];
+    for i=1:N
+       Aeq(i*12-11:i*12-2, i*13-12:i*13-3) = blkdiag(A,1,1);
+       Aeq(i*12-11:i*12-2, i*13-2 :i*13) = [[B, zeros(size(B,1),1)]; zeros(2,size(B,2)+1)];
+       Aeq(i*12-11:i*12-2, i*13+1 :i*13+10) = - eye(size(A,1)+2);
+       Aeq(i*12-1 :i*12  , i*13+9 :i*13+10) = eye(2); % r and r_dot constraints
+       beq(i*12-11:i*12-2) = zeros(10,1); % b (signs reversed cuz on other side of eqn) MUST USE the continuous A B
+       beq(i*12-1 :i*12) = [r; 0]; % r and r_dot constraints
+    end
+%     
+%     Aeq = [Aeq; zeros(8, size(Aeq,2))];
+%     beq = [beq; zeros(8, size(beq,2))];
+%     Aeq(end-7:end, end-9:end-2) = eye(8);
+%     beq(end-7:end) = trgt;
 end
 
 
 %% model linearisation
-function [genericA, genericB] = obtainJacs(cP)
+function [genericA, genericB, der] = obtainJacs(cP)
 
     syms dx x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 fx fy fl 
     g  = 9.81;
@@ -240,4 +279,40 @@ function [genericA, genericB] = obtainJacs(cP)
 
     genericA = @(w) double(subs(jacA, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, fx, fy, fl], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
     genericB = @(w) double(subs(jacB, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, fx, fy, fl], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
+    der = @(w) double(subs(dx, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, fx, fy, fl], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
+end
+
+function [A,B,C,D] = genModel(m,M,MR,r,g,Tx,Ty,Vx,Vy,Ts)
+    % replace A,B,C,D with the correct values
+    A=[ 0, 1,             0, 0,        0,                          0, 0,              0;
+        0, -Tx/(M+MR),    0, 0,        g*m/(M+MR),                 0, 0,              0;
+        0, 0,             0, 1,        0,                          0, 0,              0;
+        0, 0,             0, -Ty/M,    0,                          0, g*m/M,          0;
+        0, 0,             0, 0,        0,                          1, 0,              0;
+        0, Tx/(r*(M+MR)), 0, 0,        -(g*(m+M+MR))/(r*(M+MR)),   0, 0,              0;
+        0, 0,             0, 0,        0,                          0, 0,              1;
+        0, 0,             0, Ty/(M*r), 0,                          0, -g*(m+M)/(M*r), 0 ];
+    
+    B=[ 0,              0;
+        Vx/(M+MR),      0;
+        0,              0;
+        0,              Vy/M;
+        0,              0;
+        -Vx/(r*(M+MR)), 0; 
+        0,              0; 
+        0,              -Vy/(M*r) ];
+    
+    C=eye(8);
+    
+    D=zeros(8,2);
+    
+    % if Ts>0 then sample the model with a zero-order hold (piecewise constant) input, otherwise return a continuous-time model
+    if Ts>0
+        sys  = ss(A,B,C,D);
+        sysd = c2d(sys, Ts);
+        A = sysd.A;
+        B = sysd.B;
+        C = sysd.C;
+        D = sysd.D;
+    end
 end

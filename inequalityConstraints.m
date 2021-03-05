@@ -15,6 +15,3 @@ function [A, b] = inequalityConstraints(N, r, tolerances)
     b(end-7:end) = tolerances - r;
 end
 
-
-
-%% linear equality constraints

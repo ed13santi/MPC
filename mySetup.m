@@ -29,7 +29,9 @@ param.craneParams = load('Crane_NominalParameters.mat');
 
 % Create generic state space that can be used at every time step using the
 % current values of x and u
-[param.genericA param.genericB] = obtainJacs(param.craneParams);
+[param.genericA, param.genericB, param.modelDerivative] = obtainJacs(param.craneParams);
+load('Crane_NominalParameters.mat');
+[param.A,param.B,param.C,~] = genModel(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
 
 end % End of mySetup
 
