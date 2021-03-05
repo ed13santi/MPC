@@ -117,14 +117,16 @@ if isempty(w0)
     
 else
     w0(1:end-13) = w0(14:end);
+    [~, ~, fref] = getLinearisation(w0(end-22:end-13), w0(end-12:end-10), 1, param.Ts, param.modelDerivative, param.genericA, param.genericB);
+    w0(end-9:end) = fref;
 end
 
 % linear inequality constraint
 [A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8));
 
 % linear equality constraints (currently only equality constraint on x0)
-%[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
-[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
+[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
+%[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
 
 % non-linear constraints
 % nonlcon = @(w) nonLinearConstraints(param.Ts, param.craneParams, w);
@@ -202,15 +204,6 @@ function [A, b] = inequalityConstraints(N, r, tolerances)
     b(4*N+9:+4*N+16) = tolerances/2 - r;
 end
 
-function [A, b] = inequalityConstraintsEASY(N, r, tolerances)
-    A = zeros(8*2, 10+13*N);
-    b = zeros(8*2, 1);
-    
-    A(end-15:end-8, end-9:end-2) = eye(8);
-    A(end-7:end, end-9:end-2) = -eye(8);
-    b(end-15:end-8) = r + tolerances;
-    b(end-7:end) = tolerances - r;
-end
 
 
 
@@ -224,19 +217,20 @@ function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, radius, Ts)
     
     Aeq(1:10,1:10) = eye(10);
     beq(1:10,:) = [x0; radius; 0];
+    
+    
+   x = [0;0;0;0;0;0;0;0; radius; 0];
+   u = [0;0;0];
+   [A, B, fref] = getLinearisation(x, u, 1, Ts, der, genA, genB);
+       
     for i=1:N
-       x = xus(13*i-12:13*i-3);
-       u = xus(13*i-2:13*i);
-       funcInp = [x(1), x(2), x(3), x(4), x(5), x(6), x(7), x(8), x(9), x(10), u(1), u(2), u(3)];
-       A = genA(funcInp);
-       B = genB(funcInp);
-%        [A, B] = getLinearisation(x, u, 10, Ts, der, genA, genB);
-       Aeq(10+i*12-11:10+i*12-2, i*13-12:i*13-3) = eye(length(x)) + Ts*A/2; 
-       Aeq(10+i*12-11:10+i*12-2, i*13-2:i*13) = Ts*B;
-       Aeq(10+i*12-11:10+i*12-2, i*13+1:i*13+10) = Ts*A/2 - eye(length(x));
+       Aeq(10+i*12-11:10+i*12-2, i*13-12:i*13-3) = A; 
+       Aeq(10+i*12-11:10+i*12-2, i*13-2:i*13) = B;
+       Aeq(10+i*12-11:10+i*12-2, i*13+1:i*13+10) = - eye(10);
+       beq(10+12*i-11:10+12*i-2) = A*x + B*u - fref; 
+       beq(10+12*i-11:10+12*i-2) = 0;
+       
        Aeq(10+i*12-1 :10+i*12, i*13+9:i*13+10) = eye(2); % r and r_dot constraints
-       beq(10+12*i-11:10+12*i-2) = - Ts * (der(funcInp) - A*x - B*u); % b (signs reversed cuz on other side of eqn) MUST USE the continuous A B
-%        beq(10+12*i-11:10+12*i-2) = zeros(10,1);
        beq(10+12*i-1 :10+12*i) = [radius; 0]; % r and r_dot constraints
     end
 end
@@ -292,7 +286,7 @@ function [genericA, genericB, der] = obtainJacs(cP)
     der      = @(w) double(subs(dx  , [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, fx, fy, fl], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
 end
 
-function [A, B] = getLinearisation(x, u, Ns, Ts, F, Fs, Fv) %using Euler's method
+function [A, B, x_next] = getLinearisation(x, u, Ns, Ts, F, Fs, Fv) %using Euler's method
     x_next = x;
     A = eye(10);
     B = zeros(10,3);

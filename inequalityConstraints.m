@@ -14,3 +14,7 @@ function [A, b] = inequalityConstraints(N, r, tolerances)
     b(4*N+9:+4*N+16) = tolerances/2 - r;
 end
 
+
+
+
+%% linear equality constraints

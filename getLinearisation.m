@@ -1,4 +1,4 @@
-function [A, B] = getLinearisation(x, u, Ns, Ts, F, Fs, Fv) %using Euler's method
+function [A, B, x_next] = getLinearisation(x, u, Ns, Ts, F, Fs, Fv) %using Euler's method
     x_next = x;
     A = eye(10);
     B = zeros(10,3);

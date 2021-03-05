@@ -21,14 +21,16 @@ if isempty(w0)
     
 else
     w0(1:end-13) = w0(14:end);
+    [~, ~, fref] = getLinearisation(w0(end-22:end-13), w0(end-12:end-10), 1, param.Ts, param.modelDerivative, param.genericA, param.genericB);
+    w0(end-9:end) = fref;
 end
 
 % linear inequality constraint
 [A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8));
 
 % linear equality constraints (currently only equality constraint on x0)
-%[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
-[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
+[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
+%[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
 
 % non-linear constraints
 % nonlcon = @(w) nonLinearConstraints(param.Ts, param.craneParams, w);
