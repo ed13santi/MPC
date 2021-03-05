@@ -30,8 +30,8 @@ param.craneParams = load('Crane_NominalParameters.mat');
 % Create generic state space that can be used at every time step using the
 % current values of x and u
 [param.genericA, param.genericB, param.modelDerivative] = obtainJacs(param.craneParams);
-%load('Crane_NominalParameters.mat');
-%[param.A,param.B,param.C,~] = genModel(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
+load('Crane_NominalParameters.mat');
+[param.A,param.B,param.C,~] = genModel(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
 
 end % End of mySetup
 
@@ -123,8 +123,8 @@ end
 [A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8));
 
 % linear equality constraints (currently only equality constraint on x0)
-[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
-%[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
+%[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
+[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
 
 % non-linear constraints
 % nonlcon = @(w) nonLinearConstraints(param.Ts, param.craneParams, w);
@@ -242,18 +242,19 @@ function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, radius, Ts)
 end
 
 function [Aeq, beq] = linearConstraintsSimple(A, B, x0, N, r, trgt)
-    Aeq = zeros(10+(10+2)*N, 13*N+10);
-    beq = zeros(10+(10+2)*N, 1);
+    Aeq = zeros(10+10*N, 13*N+10);
+    beq = zeros(10+10*N, 1);
         
     Aeq(1:10,1:10) = eye(10);
     beq(1:10,:) = [x0; r; 0];
     for i=1:N
-       Aeq(10+i*12-11:10+i*12-2, i*13-12:i*13-3) = blkdiag(A,1,1);
-       Aeq(10+i*12-11:10+i*12-2, i*13-2 :i*13) = [[B, zeros(size(B,1),1)]; zeros(2,size(B,2)+1)];
-       Aeq(10+i*12-11:10+i*12-2, i*13+1 :i*13+10) = - eye(size(A,1)+2);
-       Aeq(10+i*12-1 :10+i*12  , i*13+9 :i*13+10) = eye(2); % r and r_dot constraints
-       beq(10+i*12-11:10+i*12-2) = zeros(10,1); % b (signs reversed cuz on other side of eqn) MUST USE the continuous A B
-       beq(10+i*12-1 :10+i*12) = [r; 0]; % r and r_dot constraints
+       Aeq(10+i*10-9:10+i*10-2, i*13-12:i*13-3) = [A, zeros(8,2)];
+       Aeq(10+i*10-9:10+i*10-2, i*13-2 :i*13) = [B, zeros(size(B,1),1)];
+       Aeq(10+i*10-9:10+i*10-2, i*13+1 :i*13+10) = [- eye(size(A,1)), zeros(size(A,1),2)];
+       beq(10+i*10-9:10+i*10-2) = zeros(8,1); % b (signs reversed cuz on other side of eqn) MUST USE the continuous A B
+       
+       Aeq(10+i*10-1:10+10*i  , i*13+9 :i*13+10) = eye(2); % r and r_dot constraints
+       beq(10+i*10-1:10+10*i) = [r; 0]; % r and r_dot constraints
     end
 end
 

@@ -227,32 +227,33 @@ function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, radius, Ts)
     for i=1:N
        x = xus(13*i-12:13*i-3);
        u = xus(13*i-2:13*i);
-       %funcInp = [x(1), x(2), x(3), x(4), x(5), x(6), x(7), x(8), x(9), x(10), u(1), u(2), u(3)];
-       %A = genA(funcInp);
-       %B = genB(funcInp);
-       [A, B] = getLinearisation(x0, u, Ns, Ts, F, Fs, Fv);
+       funcInp = [x(1), x(2), x(3), x(4), x(5), x(6), x(7), x(8), x(9), x(10), u(1), u(2), u(3)];
+       A = genA(funcInp);
+       B = genB(funcInp);
+%        [A, B] = getLinearisation(x, u, 10, Ts, der, genA, genB);
        Aeq(10+i*12-11:10+i*12-2, i*13-12:i*13-3) = eye(length(x)) + Ts*A/2; 
        Aeq(10+i*12-11:10+i*12-2, i*13-2:i*13) = Ts*B;
        Aeq(10+i*12-11:10+i*12-2, i*13+1:i*13+10) = Ts*A/2 - eye(length(x));
        Aeq(10+i*12-1 :10+i*12, i*13+9:i*13+10) = eye(2); % r and r_dot constraints
        beq(10+12*i-11:10+12*i-2) = - Ts * (der(funcInp) - A*x - B*u); % b (signs reversed cuz on other side of eqn) MUST USE the continuous A B
+%        beq(10+12*i-11:10+12*i-2) = zeros(10,1);
        beq(10+12*i-1 :10+12*i) = [radius; 0]; % r and r_dot constraints
     end
 end
 
 function [Aeq, beq] = linearConstraintsSimple(A, B, x0, N, r, trgt)
-    Aeq = zeros(10+(10+2)*N, 13*N+10);
-    beq = zeros(10+(10+2)*N, 1);
+    Aeq = zeros(10+10*N, 13*N+10);
+    beq = zeros(10+10*N, 1);
         
     Aeq(1:10,1:10) = eye(10);
     beq(1:10,:) = [x0; r; 0];
     for i=1:N
-       Aeq(10+i*12-11:10+i*12-2, i*13-12:i*13-3) = blkdiag(A,1,1);
-       Aeq(10+i*12-11:10+i*12-2, i*13-2 :i*13) = [[B, zeros(size(B,1),1)]; zeros(2,size(B,2)+1)];
-       Aeq(10+i*12-11:10+i*12-2, i*13+1 :i*13+10) = - eye(size(A,1)+2);
-       Aeq(10+i*12-1 :10+i*12  , i*13+9 :i*13+10) = eye(2); % r and r_dot constraints
-       beq(10+i*12-11:10+i*12-2) = zeros(10,1); % b (signs reversed cuz on other side of eqn) MUST USE the continuous A B
-       beq(10+i*12-1 :10+i*12) = [r; 0]; % r and r_dot constraints
+       Aeq(10+i*1-11:10+i*12-2, i*13-12:i*13-3) = blkdiag(A,1,0);
+       Aeq(10+i*1-11:10+i*12-2, i*13-2 :i*13) = [[B, zeros(size(B,1),1)]; zeros(2,size(B,2)+1)];
+       Aeq(10+i*1-11:10+i*12-2, i*13+1 :i*13+10) = - eye(size(A,1)+2);
+       Aeq(10+i*1-1 :10+i*12  , i*13+9 :i*13+10) = eye(2); % r and r_dot constraints
+       beq(10+i*1-11:10+i*12-2) = zeros(10,1); % b (signs reversed cuz on other side of eqn) MUST USE the continuous A B
+       beq(10+i*-1 :10+i*12) = [r; 0]; % r and r_dot constraints
     end
 end
 
@@ -297,8 +298,10 @@ function [A, B] = getLinearisation(x, u, Ns, Ts, F, Fs, Fv) %using Euler's metho
         
     Ti = Ts/Ns;
     for i=1:Ns
-        x_next = x_next + Ti * F([x_next,u]);
-        [A B] = (eye(10) + Ti * Fs([x_next,u])) * [A B] + [zeros(10), Ti * Fv([x_next,u]))];
+        x_next = x_next + Ti * F([x_next;u]);
+        tmp = (eye(10) + Ti * Fs([x_next;u])) * [A, B] + [zeros(10), Ti * Fv([x_next;u])];
+        A = tmp(:,1:10);
+        B = tmp(:,11:end);
     end
 end
 
