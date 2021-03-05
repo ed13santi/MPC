@@ -12,7 +12,7 @@ param.Wmax = shape.Wmax;
 param.Tf = shape.Tf;    
 
 % This is how to set the sampling interval
-param.Ts = 0.05;
+param.Ts = 0.1;
 
 % This is a sample way to send reference points
 param.xTar = shape.target(1);
@@ -30,8 +30,8 @@ param.craneParams = load('Crane_NominalParameters.mat');
 % Create generic state space that can be used at every time step using the
 % current values of x and u
 [param.genericA, param.genericB, param.modelDerivative] = obtainJacs(param.craneParams);
-load('Crane_NominalParameters.mat');
-[param.A,param.B,param.C,~] = genModel(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
+%load('Crane_NominalParameters.mat');
+%[param.A,param.B,param.C,~] = genModel(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
 
 end % End of mySetup
 
@@ -114,16 +114,17 @@ if isempty(w0)
     for i=9:13:13*N+10
        w0(i,1) = param.craneParams.r; 
     end
+    
 else
-    w0(1:13*N-3) = w0(14:13*N+10);
+    w0(1:end-13) = w0(14:end);
 end
 
 % linear inequality constraint
 [A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8));
 
 % linear equality constraints (currently only equality constraint on x0)
-%[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
-[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
+[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
+%[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
 
 % non-linear constraints
 % nonlcon = @(w) nonLinearConstraints(param.Ts, param.craneParams, w);
@@ -132,7 +133,9 @@ end
 % options = optimoptions(@fmincon);
 
 % optimisation
-w = fmincon(objFunc,w0,A,b,Aeq,beq);
+A = sparse(A);
+Aeq = sparse(Aeq);
+% w = fmincon(objFunc,w0,A,b,Aeq,beq);
 % H = zeros(size(A,2));
 % for i=1:N
 %     H(i*13-2:i*13-1,i*13-2:i*13-1) = eye(2);
@@ -140,6 +143,11 @@ w = fmincon(objFunc,w0,A,b,Aeq,beq);
 % H = sparse(H);
 % options = optimoptions('fmincon','Algorithm','interior-point');
 % w = quadprog(H,zeros(1,size(A,2)),A,b,Aeq,beq);
+penalties = zeros(10+13*N,1);
+for i=1:N
+    penalties(13*i-2:13*i-1) = ones(2,1); 
+end
+w = quadprog(diag(penalties),zeros(1,size(A,2)),A,b,Aeq,beq);
 
 % extract u from w
 u = w(11:12);
@@ -155,18 +163,23 @@ end % End of myMPController
 %% objective function
 
 function out = objFuncN(w, N)
-    vels = zeros(2*(N+1), 1);
-    us = zeros(2*N, 1);
-    for i = 1:N
-        vels(2*i-1:2*i, 1) = [w(13*i-11); w(13*i-9)];
-        us(2*i-1:2*i, 1) = [w(13*i-2); w(13*i-1)];
+    penalties = zeros(10+13*N,1);
+    for i=1:N
+       penalties(13*i-2:13*i-1) = ones(2,1); 
     end
-    vels(2*(N+1)-1:2*(N+1), 1) = [w(13*(N+1)-11); w(13*(N+1)-9)];
-    
-    vels = vels(3:end,1) + vels(1:end-2,1);
-    prods = us .* vels;
-    maxed = max(prods,[],2);
-    out = sum(maxed);
+    out = w' * diag(penalties) * w;
+%     vels = zeros(2*(N+1), 1);
+%     us = zeros(2*N, 1);
+%     for i = 1:N
+%         vels(2*i-1:2*i, 1) = w(13*i-11:2:13*i-9);
+%         us(2*i-1:2*i, 1) = w(13*i-2:13*i-1);
+%     end
+%     vels(2*(N+1)-1:2*(N+1), 1) = w(13*(N+1)-11:2:13*(N+1)-9);
+%     
+%     vels = vels(3:end,1) + vels(1:end-2,1);
+%     prods = us .* vels;
+%     maxed = max(prods,[],2);
+%     out = sum(maxed);
 end
 
 
@@ -178,16 +191,15 @@ function [A, b] = inequalityConstraints(N, r, tolerances)
     b = zeros(4*N+8*2, 1);
     for i=1:N
         A(4*i-3,13*i-2) =  1; % u < 1
-        A(4*i-2,13*i-1) =  1; % u < 1
-        A(4*i-1,13*i-2) = -1; % u > 1
+        A(4*i-2,13*i-2) = -1; % u > 1
+        A(4*i-1,13*i-1) =  1; % u < 1
         A(4*i  ,13*i-1) = -1; % u > 1
-        b(4*i-3:4*i-2) =  ones(2,1); % u < 1
-        b(4*i-1:4*i  ) = -ones(2,1); % u > 1
+        b(4*i-3:4*i) =  [1;1;1;1];
     end
-    A(end-15:end-8, end-9:end-2) = eye(8);
-    A(end-7:end, end-9:end-2) = -eye(8);
-    b(end-15:end-8) = r + tolerances;
-    b(end-7:end) = tolerances - r;
+    A(4*N+1:+4*N+8 , 13*N+1:13*N+8) = eye(8);
+    A(4*N+9:+4*N+16, 13*N+1:13*N+8) = -eye(8);
+    b(4*N+1:+4*N+8)  = r + tolerances/2;
+    b(4*N+9:+4*N+16) = tolerances/2 - r;
 end
 
 function [A, b] = inequalityConstraintsEASY(N, r, tolerances)
@@ -274,7 +286,7 @@ function [genericA, genericB, der] = obtainJacs(cP)
 
     genericA = @(w) double(subs(jacA, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, fx, fy, fl], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
     genericB = @(w) double(subs(jacB, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, fx, fy, fl], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
-    der = @(w) double(subs(dx, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, fx, fy, fl], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
+    der      = @(w) double(subs(dx  , [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, fx, fy, fl], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
 end
 
 function [A,B,C,D] = genModel(m,M,MR,r,g,Tx,Ty,Vx,Vy,Ts)

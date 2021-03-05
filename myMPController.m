@@ -18,16 +18,17 @@ if isempty(w0)
     for i=9:13:13*N+10
        w0(i,1) = param.craneParams.r; 
     end
+    
 else
-    w0(1:13*N-3) = w0(14:13*N+10);
+    w0(1:end-13) = w0(14:end);
 end
 
 % linear inequality constraint
 [A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8));
 
 % linear equality constraints (currently only equality constraint on x0)
-%[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
-[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
+[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
+%[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
 
 % non-linear constraints
 % nonlcon = @(w) nonLinearConstraints(param.Ts, param.craneParams, w);
@@ -36,7 +37,9 @@ end
 % options = optimoptions(@fmincon);
 
 % optimisation
-w = fmincon(objFunc,w0,A,b,Aeq,beq);
+A = sparse(A);
+Aeq = sparse(Aeq);
+% w = fmincon(objFunc,w0,A,b,Aeq,beq);
 % H = zeros(size(A,2));
 % for i=1:N
 %     H(i*13-2:i*13-1,i*13-2:i*13-1) = eye(2);
@@ -44,6 +47,11 @@ w = fmincon(objFunc,w0,A,b,Aeq,beq);
 % H = sparse(H);
 % options = optimoptions('fmincon','Algorithm','interior-point');
 % w = quadprog(H,zeros(1,size(A,2)),A,b,Aeq,beq);
+penalties = zeros(10+13*N,1);
+for i=1:N
+    penalties(13*i-2:13*i-1) = ones(2,1); 
+end
+w = quadprog(diag(penalties),zeros(1,size(A,2)),A,b,Aeq,beq);
 
 % extract u from w
 u = w(11:12);

@@ -20,8 +20,8 @@ if coursenum == 1
     start  = [0.05, 0.05];
     target = [0.45, 0.45];
     
-    Wmax = 0.1;
-    Tf   = 5;
+    Wmax = 1;
+    Tf   = 15;
 elseif coursenum == 2
     % The shape for the second part
     constraints.rect = [0.00, 0.05;
