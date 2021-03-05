@@ -230,11 +230,13 @@ function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, radius, Ts)
        funcInp = [x(1), x(2), x(3), x(4), x(5), x(6), x(7), x(8), x(9), x(10), u(1), u(2), u(3)];
        A = genA(funcInp);
        B = genB(funcInp);
+%        [A, B] = getLinearisation(x, u, 10, Ts, der, genA, genB);
        Aeq(10+i*12-11:10+i*12-2, i*13-12:i*13-3) = eye(length(x)) + Ts*A/2; 
        Aeq(10+i*12-11:10+i*12-2, i*13-2:i*13) = Ts*B;
        Aeq(10+i*12-11:10+i*12-2, i*13+1:i*13+10) = Ts*A/2 - eye(length(x));
        Aeq(10+i*12-1 :10+i*12, i*13+9:i*13+10) = eye(2); % r and r_dot constraints
        beq(10+12*i-11:10+12*i-2) = - Ts * (der(funcInp) - A*x - B*u); % b (signs reversed cuz on other side of eqn) MUST USE the continuous A B
+%        beq(10+12*i-11:10+12*i-2) = zeros(10,1);
        beq(10+12*i-1 :10+12*i) = [radius; 0]; % r and r_dot constraints
     end
 end
@@ -287,6 +289,20 @@ function [genericA, genericB, der] = obtainJacs(cP)
     genericA = @(w) double(subs(jacA, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, fx, fy, fl], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
     genericB = @(w) double(subs(jacB, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, fx, fy, fl], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
     der      = @(w) double(subs(dx  , [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, fx, fy, fl], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
+end
+
+function [A, B] = getLinearisation(x, u, Ns, Ts, F, Fs, Fv) %using Euler's method
+    x_next = x;
+    A = eye(10);
+    B = zeros(10,3);
+        
+    Ti = Ts/Ns;
+    for i=1:Ns
+        x_next = x_next + Ti * F([x_next;u]);
+        tmp = (eye(10) + Ti * Fs([x_next;u])) * [A, B] + [zeros(10), Ti * Fv([x_next;u])];
+        A = tmp(:,1:10);
+        B = tmp(:,11:end);
+    end
 end
 
 function [A,B,C,D] = genModel(m,M,MR,r,g,Tx,Ty,Vx,Vy,Ts)

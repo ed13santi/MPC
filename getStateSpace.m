@@ -13,11 +13,13 @@ function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, radius, Ts)
        funcInp = [x(1), x(2), x(3), x(4), x(5), x(6), x(7), x(8), x(9), x(10), u(1), u(2), u(3)];
        A = genA(funcInp);
        B = genB(funcInp);
+%        [A, B] = getLinearisation(x, u, 10, Ts, der, genA, genB);
        Aeq(10+i*12-11:10+i*12-2, i*13-12:i*13-3) = eye(length(x)) + Ts*A/2; 
        Aeq(10+i*12-11:10+i*12-2, i*13-2:i*13) = Ts*B;
        Aeq(10+i*12-11:10+i*12-2, i*13+1:i*13+10) = Ts*A/2 - eye(length(x));
        Aeq(10+i*12-1 :10+i*12, i*13+9:i*13+10) = eye(2); % r and r_dot constraints
        beq(10+12*i-11:10+12*i-2) = - Ts * (der(funcInp) - A*x - B*u); % b (signs reversed cuz on other side of eqn) MUST USE the continuous A B
+%        beq(10+12*i-11:10+12*i-2) = zeros(10,1);
        beq(10+12*i-1 :10+12*i) = [radius; 0]; % r and r_dot constraints
     end
 end
