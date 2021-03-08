@@ -110,22 +110,18 @@ objFunc = @(w) objFuncN(w, N);
 % inital guess w0
 persistent w0
 if isempty(w0)
-    w0 = zeros(13*N+10, 1);
-    for i=9:13:13*N+10
-       w0(i,1) = param.craneParams.r; 
-    end
-    
+    w0 = zeros(10*N+8, 1);
 else
-    w0(1:end-13) = w0(14:end);
-    [~, ~, fref] = getLinearisation(w0(end-22:end-13), w0(end-12:end-10), 1, param.Ts, param.modelDerivative, param.genericA, param.genericB);
-    w0(end-9:end) = fref;
+    w0(1:end-10) = w0(11:end);
+    [~, ~, fref] = getLinearisation(w0(end-17:end-10), w0(end-9:end-8), 1, param.Ts, param.modelDerivative, param.genericA, param.genericB);
+    w0(end-7:end) = fref;
 end
 
 % linear inequality constraint
 [A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8));
 
 % linear equality constraints (currently only equality constraint on x0)
-[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
+[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
 %[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
 %[Aeq, beq] = third(param.A, param.B, x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
 
@@ -146,14 +142,14 @@ Aeq = sparse(Aeq);
 % H = sparse(H);
 % options = optimoptions('fmincon','Algorithm','interior-point');
 % w = quadprog(H,zeros(1,size(A,2)),A,b,Aeq,beq);
-penalties = zeros(10+13*N,1);
+penalties = zeros(8+10*N,1);
 for i=1:N
-    penalties(13*i-2:13*i-1) = ones(2,1); 
+    penalties(10*i-1:10*i) = ones(2,1); 
 end
-w = quadprog(diag(penalties),zeros(1,size(A,2)),A,b,Aeq,beq);
+w = quadprog(diag(penalties),zeros(1,length(penalties)),A,b,Aeq,beq);
 
 % extract u from w
-u = w(11:12);
+u = w(9:10);
 
 end % End of myMPController
 
@@ -166,9 +162,9 @@ end % End of myMPController
 %% objective function
 
 function out = objFuncN(w, N)
-    penalties = zeros(10+13*N,1);
+    penalties = zeros(8+10*N,1);
     for i=1:N
-       penalties(13*i-2:13*i-1) = ones(2,1); 
+       penalties(10*i-1:10*i) = ones(2,1); 
     end
     out = w' * diag(penalties) * w;
 %     vels = zeros(2*(N+1), 1);
@@ -190,49 +186,48 @@ end
 
 %% linear inequality constraints
 function [A, b] = inequalityConstraints(N, r, tolerances)
-    A = zeros(4*N+8*2, 10+13*N);
+    A = zeros(4*N+8*2, 8+10*N);
     b = zeros(4*N+8*2, 1);
     for i=1:N
-        A(4*i-3,13*i-2) =  1; % u < 1
-        A(4*i-2,13*i-2) = -1; % u > 1
-        A(4*i-1,13*i-1) =  1; % u < 1
-        A(4*i  ,13*i-1) = -1; % u > 1
+        A(4*i-3,10*i-1) =  1; % u < 1
+        A(4*i-2,10*i-1) = -1; % u > 1
+        A(4*i-1,10*i) =  1; % u < 1
+        A(4*i  ,10*i) = -1; % u > 1
         b(4*i-3:4*i) =  [1;1;1;1];
     end
-    A(4*N+1:+4*N+8 , 13*N+1:13*N+8) = eye(8);
-    A(4*N+9:+4*N+16, 13*N+1:13*N+8) = -eye(8);
-    b(4*N+1:+4*N+8)  = r + tolerances/2;
-    b(4*N+9:+4*N+16) = tolerances/2 - r;
+    A(4*N+1:4*N+8 , 10*N+1:10*N+8) = eye(8);
+    A(4*N+9:4*N+16, 10*N+1:10*N+8) = -eye(8);
+    b(4*N+1:4*N+8)  = r + tolerances/2;
+    b(4*N+9:4*N+16) = tolerances/2 - r;
 end
 
 
 
 
 %% linear equality constraints
-function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, radius, Ts)
-    xus = [x0; radius; 0; w0(11:end-10)];
-    x = zeros(N*10, 1);
-    u = zeros(N*3, 1);
-    Aeq = zeros(10+(10+2)*N, length(w0));
-    beq = zeros(10+(10+2)*N, 1);
+function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, Ts)
+    xus = [x0; w0(9:end-8)];
+    x = zeros(N*8, 1);
+    u = zeros(N*2, 1);
+    Aeq = zeros(8+8*N, length(w0));
+    beq = zeros(8+8*N, 1);
     
-    Aeq(1:10,1:10) = eye(10);
-    beq(1:10,:) = [x0; radius; 0];
+    Aeq(1:8,1:8) = eye(8);
+    beq(1:8,:) = x0;
     
     
-    x = w0(1:10);
-    u = w0(11:13);
-    [A, B, fref] = getLinearisation(x, u, 10, Ts, der, genA, genB);
+%     x = w0(1:8);
+%     u = w0(9:10);
+%     [A, B, fref] = getLinearisation(x, u, 1, Ts, der, genA, genB);
        
     for i=1:N
-       Aeq(10+i*12-11:10+i*12-2, i*13-12:i*13-3) = A; 
-       Aeq(10+i*12-11:10+i*12-2, i*13-2:i*13) = B;
-       Aeq(10+i*12-11:10+i*12-2, i*13+1:i*13+10) = - eye(10);
-       beq(10+i*12-11:10+i*12-2) = A*x + B*u - fref; 
-       %beq(10+i*12-11:10+i*12-2) = 0;
-       
-       Aeq(10+i*12-1 :10+i*12, i*13+9:i*13+10) = eye(2); % r and r_dot constraints
-       beq(10+i*12-1 :10+i*12) = [radius; 0]; % r and r_dot constraints
+       x = w0(i*10-9:i*10-2);
+       u = w0(i*10-1:i*10);
+       [A, B, fref] = getLinearisation(x, u, 1, Ts, der, genA, genB);
+       Aeq(8+i*8-7:8+i*8, i*10-9:i*10-2) = A; 
+       Aeq(8+i*8-7:8+i*8, i*10-1:i*10) = B;
+       Aeq(8+i*8-7:8+i*8, i*10+1:i*10+8) = - eye(8);
+       beq(8+i*8-7:8+i*8) = A*x + B*u - fref;
     end
 end
 
@@ -280,7 +275,7 @@ end
 
 
 %% model linearisation
-function [genericA, genericB, der] = obtainJacs(cP)
+function [Fs, Fv, der] = obtainJacs(cP)
 
     syms dx x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 ux uy uz
     g  = 9.81;
@@ -293,8 +288,9 @@ function [genericA, genericB, der] = obtainJacs(cP)
     Vx = cP.Vx;
     Vy = cP.Vy;
     Vl = cP.Vl;
+    r  = cP.r;
     
-    dx = sym(zeros(10, 1));
+    dx = sym(zeros(8, 1));
 
     dx(1, 1)  = x2;
     dx(2, 1)  = (cos(x5) .* cos(x7) .^ 2 .* sin(x5) .* g .* m + sin(x5) .* (Tl .* x10 - Vl * uz) .* cos(x7) - Tx .* x2 + Vx * ux) ./ (M + MR);
@@ -304,29 +300,29 @@ function [genericA, genericB, der] = obtainJacs(cP)
     dx(6, 1)  = (-cos(x5) .^ 2 .* cos(x7) .^ 2 .* sin(x5) .* g .* m + (-sin(x5) .* (Tl .* x10 - Vl * uz) .* cos(x5) - 0.2e1 .* x6 .* x10 .* (M + MR)) .* cos(x7) + (Tx .* x2 - Vx * ux) .* cos(x5) + 0.2e1 .* (M + MR) .* (sin(x7) .* x6 .* x8 .* x9 - sin(x5) .* g ./ 0.2e1)) ./ x9 ./ cos(x7) ./ (M + MR);
     dx(7, 1)  = x8;
     dx(8, 1)  = (-cos(x5) .* g .* sin(x7) .* m .* (M .* cos(x5) .^ 2 + MR) .* cos(x7) .^ 2 + ((-M .* (Tl .* x10 - Vl * uz) .* cos(x5) .^ 2 - M .^ 2 .* x6 .^ 2 .* x9 - x6 .^ 2 .* x9 .* MR .* M - MR .* (Tl .* x10 - Vl * uz)) .* sin(x7) - (-Ty .* x4 + Vy * uy) .* (M + MR)) .* cos(x7) - 0.2e1 .* ((g .* (M + MR) .* cos(x5) ./ 0.2e1 + sin(x5) .* (Tx .* x2 - Vx * ux) ./ 0.2e1) .* sin(x7) + x10 .* x8 .* (M + MR)) .* M) ./ x9 ./ M ./ (M + MR);
-    dx(9, 1)  = x10;
-    dx(10, 1) = (cos(x5) .* g .* m .^ 2 .* (M .* cos(x5) .^ 2 + MR) .* cos(x7) .^ 3 + m .* (M .* (Tl .* x10 - Vl * uz) .* cos(x5) .^ 2 + M .^ 2 .* x6 .^ 2 .* x9 + x6 .^ 2 .* x9 .* MR .* M + MR .* (Tl .* x10 - Vl * uz)) .* cos(x7) .^ 2 + (-g .* m .* (M + MR) .* cos(x5) + M .* sin(x5) .* (Tx .* x2 - Vx * ux)) .* m .* cos(x7) + (M + MR) .* (-m .* (-Ty .* x4 + Vy * uy) .* sin(x7) + (M .* x8 .^ 2 .* x9 - Tl .* x10 + Vl * uz) .* m - M .* (Tl .* x10 - Vl * uz))) ./ m ./ M ./ (M + MR);
-   
-    jacA = jacobian(dx, [x1 x2 x3 x4 x5 x6 x7 x8 x9 x10]);
-    jacB = jacobian(dx, [ux uy uz]);
+    
+    dx = subs(dx, [x9 x10 uz], [r 0 0]);
+    
+    jacA = jacobian(dx, [x1 x2 x3 x4 x5 x6 x7 x8]);
+    jacB = jacobian(dx, [ux uy]);
 
-    genericA = @(w) double(subs(jacA, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, ux, uy, uz], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
-    genericB = @(w) double(subs(jacB, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, ux, uy, uz], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
-    der      = @(w) double(subs(dx  , [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, ux, uy, uz], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
+    Fs  = @(w) double(subs(jacA, [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10)]));
+    Fv  = @(w) double(subs(jacB, [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10)]));
+    der = @(w) double(subs(dx  , [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10)]));
 end
 
 
 function [A, B, x_next] = getLinearisation(x, u, Ns, Ts, F, Fs, Fv) %using Euler's method
     x_next = x;
-    A = eye(10);
-    B = zeros(10,3);
+    A = eye(8);
+    B = zeros(8,2);
         
     Ti = Ts/Ns;
     for i=1:Ns
         x_next = x_next + Ti * F([x_next;u]);
-        tmp = (eye(10) + Ti * Fs([x_next;u])) * [A, B] + [zeros(10), Ti * Fv([x_next;u])];
-        A = tmp(:,1:10);
-        B = tmp(:,11:end);
+        tmp = (eye(8) + Ti * Fs([x_next;u])) * [A, B] + [zeros(8), Ti * Fv([x_next;u])];
+        A = tmp(:,1:8);
+        B = tmp(:,9:10);
     end
 end
 

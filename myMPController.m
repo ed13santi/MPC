@@ -14,22 +14,18 @@ objFunc = @(w) objFuncN(w, N);
 % inital guess w0
 persistent w0
 if isempty(w0)
-    w0 = zeros(13*N+10, 1);
-    for i=9:13:13*N+10
-       w0(i,1) = param.craneParams.r; 
-    end
-    
+    w0 = zeros(10*N+8, 1);
 else
-    w0(1:end-13) = w0(14:end);
-    [~, ~, fref] = getLinearisation(w0(end-22:end-13), w0(end-12:end-10), 1, param.Ts, param.modelDerivative, param.genericA, param.genericB);
-    w0(end-9:end) = fref;
+    w0(1:end-10) = w0(11:end);
+    [~, ~, fref] = getLinearisation(w0(end-17:end-10), w0(end-9:end-8), 1, param.Ts, param.modelDerivative, param.genericA, param.genericB);
+    w0(end-7:end) = fref;
 end
 
 % linear inequality constraint
 [A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8));
 
 % linear equality constraints (currently only equality constraint on x0)
-[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
+[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
 %[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
 %[Aeq, beq] = third(param.A, param.B, x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
 
@@ -50,14 +46,14 @@ Aeq = sparse(Aeq);
 % H = sparse(H);
 % options = optimoptions('fmincon','Algorithm','interior-point');
 % w = quadprog(H,zeros(1,size(A,2)),A,b,Aeq,beq);
-penalties = zeros(10+13*N,1);
+penalties = zeros(8+10*N,1);
 for i=1:N
-    penalties(13*i-2:13*i-1) = ones(2,1); 
+    penalties(10*i-1:10*i) = ones(2,1); 
 end
-w = quadprog(diag(penalties),zeros(1,size(A,2)),A,b,Aeq,beq);
+w = quadprog(diag(penalties),zeros(1,length(penalties)),A,b,Aeq,beq);
 
 % extract u from w
-u = w(11:12);
+u = w(9:10);
 
 end % End of myMPController
 

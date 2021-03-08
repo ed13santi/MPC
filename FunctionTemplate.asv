@@ -30,9 +30,7 @@ param.craneParams = load('Crane_NominalParameters.mat');
 % Create generic state space that can be used at every time step using the
 % current values of x and u
 [param.genericA, param.genericB, param.modelDerivative] = obtainJacs(param.craneParams);
-load('Crane_NominalParameters.mat');
-YOURMUM = load('Crane_NominalParameters.mat')
-[param.A,param.B,param.C,~] = genModel(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
+%[param.A,param.B,param.C,~] = genModel(m,M,MR,r,9.81,Tx,Ty,Vx,Vy,param.Ts);
 
 end % End of mySetup
 
@@ -111,7 +109,7 @@ objFunc = @(w) objFuncN(w, N);
 % inital guess w0
 persistent w0
 if isempty(w0)
-    w0 = zeros(13*N+10, 1);
+    w0 = zeros(10*N+10, 1);
     for i=9:13:13*N+10
        w0(i,1) = param.craneParams.r; 
     end
@@ -147,14 +145,14 @@ Aeq = sparse(Aeq);
 % H = sparse(H);
 % options = optimoptions('fmincon','Algorithm','interior-point');
 % w = quadprog(H,zeros(1,size(A,2)),A,b,Aeq,beq);
-penalties = zeros(10+13*N,1);
+penalties = zeros(8+10*N,1);
 for i=1:N
-    penalties(13*i-2:13*i-1) = ones(2,1); 
+    penalties(10*i-1:10*i) = ones(2,1); 
 end
 w = quadprog(diag(penalties),zeros(1,size(A,2)),A,b,Aeq,beq);
 
 % extract u from w
-u = w(11:12);
+u = w(9:10);
 
 end % End of myMPController
 
@@ -167,9 +165,9 @@ end % End of myMPController
 %% objective function
 
 function out = objFuncN(w, N)
-    penalties = zeros(10+13*N,1);
+    penalties = zeros(8+10*N,1);
     for i=1:N
-       penalties(13*i-2:13*i-1) = ones(2,1); 
+       penalties(10*i-1:10*i) = ones(2,1); 
     end
     out = w' * diag(penalties) * w;
 %     vels = zeros(2*(N+1), 1);
@@ -191,49 +189,46 @@ end
 
 %% linear inequality constraints
 function [A, b] = inequalityConstraints(N, r, tolerances)
-    A = zeros(4*N+8*2, 10+13*N);
+    A = zeros(4*N+8*2, 8+10*N);
     b = zeros(4*N+8*2, 1);
     for i=1:N
-        A(4*i-3,13*i-2) =  1; % u < 1
-        A(4*i-2,13*i-2) = -1; % u > 1
-        A(4*i-1,13*i-1) =  1; % u < 1
-        A(4*i  ,13*i-1) = -1; % u > 1
+        A(4*i-3,10*i-1) =  1; % u < 1
+        A(4*i-2,10*i-1) = -1; % u > 1
+        A(4*i-1,10*i) =  1; % u < 1
+        A(4*i  ,10*i) = -1; % u > 1
         b(4*i-3:4*i) =  [1;1;1;1];
     end
-    A(4*N+1:+4*N+8 , 13*N+1:13*N+8) = eye(8);
-    A(4*N+9:+4*N+16, 13*N+1:13*N+8) = -eye(8);
-    b(4*N+1:+4*N+8)  = r + tolerances/2;
-    b(4*N+9:+4*N+16) = tolerances/2 - r;
+    A(4*N+1:4*N+8 , 13*N+1:13*N+8) = eye(8);
+    A(4*N+9:4*N+16, 13*N+1:13*N+8) = -eye(8);
+    b(4*N+1:4*N+8)  = r + tolerances/2;
+    b(4*N+9:4*N+16) = tolerances/2 - r;
 end
 
 
 
 
 %% linear equality constraints
-function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, radius, Ts)
-    xus = [x0; radius; 0; w0(11:end-10)];
-    x = zeros(N*10, 1);
-    u = zeros(N*3, 1);
-    Aeq = zeros(10+(10+2)*N, length(w0));
-    beq = zeros(10+(10+2)*N, 1);
+function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, Ts)
+    xus = [x0; w0(9:end-8)];
+    x = zeros(N*8, 1);
+    u = zeros(N*2, 1);
+    Aeq = zeros(8+8*N, length(w0));
+    beq = zeros(8+8*N, 1);
     
-    Aeq(1:10,1:10) = eye(10);
-    beq(1:10,:) = [x0; radius; 0];
+    Aeq(1:10,1:10) = eye(8);
+    beq(1:10,:) = x0;
     
     
-    x = [0;0;0;0;0;0;0;0;radius;0];
-    u = [0;0;0];
+    x = w0(1:8);
+    u = w0(9:10);
     [A, B, fref] = getLinearisation(x, u, 1, Ts, der, genA, genB);
        
     for i=1:N
-       Aeq(10+i*12-11:10+i*12-2, i*13-12:i*13-3) = A; 
-       Aeq(10+i*12-11:10+i*12-2, i*13-2:i*13) = B;
-       Aeq(10+i*12-11:10+i*12-2, i*13+1:i*13+10) = - eye(10);
-       beq(10+i*12-11:10+i*12-2) = A*x + B*u - fref; 
-       beq(10+i*12-11:10+i*12-2) = 0;
-       
-       Aeq(10+i*12-1 :10+i*12, i*13+9:i*13+10) = eye(2); % r and r_dot constraints
-       beq(10+i*12-1 :10+i*12) = [radius; 0]; % r and r_dot constraints
+       Aeq(8+i*8-7:8+i*8, i*10-9:i*10-2) = A; 
+       Aeq(8+i*8-7:8+i*8, i*10-1:i*10) = B;
+       Aeq(8+i*8-7:8+i*8, i*10+1:i*10+10) = - eye(10);
+       beq(8+i*8-7:8+i*8) = A*x + B*u - fref; 
+       %beq(10+i*12-11:10+i*12-2) = 0;
     end
 end
 
@@ -298,22 +293,22 @@ function [genericA, genericB, der] = obtainJacs(cP)
     dx = sym(zeros(10, 1));
 
     dx(1, 1)  = x2;
-    dx(2, 1)  = (cos(x5) .* cos(x7) .^ 2 .* sin(x5) .* 9.81 .* m + sin(x5) .* (Tl .* x10 - Vl * uz) .* cos(x7) - Tx .* x2 + Vx * ux) ./ (M + MR);
+    dx(2, 1)  = (cos(x5) .* cos(x7) .^ 2 .* sin(x5) .* g .* m + sin(x5) .* (Tl .* x10 - Vl * uz) .* cos(x7) - Tx .* x2 + Vx * ux) ./ (M + MR);
     dx(3, 1)  = x4;
     dx(4, 1)  = ((m .* g .* cos(x5) .* cos(x7) + Tl .* x10 - Vl * uz) .* sin(x7) - Ty .* x4 + Vy * uy) ./ M;
     dx(5, 1)  = x6;  
     dx(6, 1)  = (-cos(x5) .^ 2 .* cos(x7) .^ 2 .* sin(x5) .* g .* m + (-sin(x5) .* (Tl .* x10 - Vl * uz) .* cos(x5) - 0.2e1 .* x6 .* x10 .* (M + MR)) .* cos(x7) + (Tx .* x2 - Vx * ux) .* cos(x5) + 0.2e1 .* (M + MR) .* (sin(x7) .* x6 .* x8 .* x9 - sin(x5) .* g ./ 0.2e1)) ./ x9 ./ cos(x7) ./ (M + MR);
     dx(7, 1)  = x8;
     dx(8, 1)  = (-cos(x5) .* g .* sin(x7) .* m .* (M .* cos(x5) .^ 2 + MR) .* cos(x7) .^ 2 + ((-M .* (Tl .* x10 - Vl * uz) .* cos(x5) .^ 2 - M .^ 2 .* x6 .^ 2 .* x9 - x6 .^ 2 .* x9 .* MR .* M - MR .* (Tl .* x10 - Vl * uz)) .* sin(x7) - (-Ty .* x4 + Vy * uy) .* (M + MR)) .* cos(x7) - 0.2e1 .* ((g .* (M + MR) .* cos(x5) ./ 0.2e1 + sin(x5) .* (Tx .* x2 - Vx * ux) ./ 0.2e1) .* sin(x7) + x10 .* x8 .* (M + MR)) .* M) ./ x9 ./ M ./ (M + MR);
-    dx(9, 1)  = x10;
-    dx(10, 1) = (cos(x5) .* g .* m .^ 2 .* (M .* cos(x5) .^ 2 + MR) .* cos(x7) .^ 3 + m .* (M .* (Tl .* x10 - Vl * uz) .* cos(x5) .^ 2 + M .^ 2 .* x6 .^ 2 .* x9 + x6 .^ 2 .* x9 .* MR .* M + MR .* (Tl .* x10 - Vl * uz)) .* cos(x7) .^ 2 + (-g .* m .* (M + MR) .* cos(x5) + M .* sin(x5) .* (Tx .* x2 - Vx * ux)) .* m .* cos(x7) + (M + MR) .* (-m .* (-Ty .* x4 + Vy * uy) .* sin(x7) + (M .* x8 .^ 2 .* x9 - Tl .* x10 + Vl * uz) .* m - M .* (Tl .* x10 - Vl * uz))) ./ m ./ M ./ (M + MR);
-        
+    
+    dx = subs(dx, uz, 0);
+    
     jacA = jacobian(dx, [x1 x2 x3 x4 x5 x6 x7 x8 x9 x10]);
-    jacB = jacobian(dx, [ux uy uy]);
+    jacB = jacobian(dx, [ux uy]);
 
-    genericA = @(w) double(subs(jacA, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, ux, uy, uz], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
-    genericB = @(w) double(subs(jacB, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, ux, uy, uz], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
-    der      = @(w) double(subs(dx  , [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, ux, uy, uz], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12), w(13)]));
+    genericA = @(w) double(subs(jacA, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12)]));
+    genericB = @(w) double(subs(jacB, [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12)]));
+    der      = @(w) double(subs(dx  , [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10), w(11), w(12)]));
 end
 
 
