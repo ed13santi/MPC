@@ -1,4 +1,4 @@
-function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, Ts)
+function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts)
     xus = [x0; w0(9:end-8)];
     Aeq = zeros(8+8*N, length(w0));
     beq = zeros(8+8*N, 1);
@@ -17,5 +17,3 @@ function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, Ts)
     end
 end
 
-
-%% model linearisation

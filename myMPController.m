@@ -8,26 +8,25 @@ u = zeros(2,1);
 % horizon length (prediction AND control)
 N = param.N;
 
-% objective function (w contains N+1 x vectors and N u vectors)
-%objFunc = @(w) objFuncN(w, N);
-
 % inital guess w0
 persistent w0
 if isempty(w0)
-    w0 = zeros(10*N+8, 1);
+    w0 = param.w_guess(1:10*N+8);
 else
     w0(1:end-10) = w0(11:end);
-    [~, ~, fref] = getLinearisation(w0(end-17:end-10), w0(end-9:end-8), 1, param.Ts, param.modelDerivative, param.genericA, param.genericB);
+    [~, ~, fref] = getLinearisation(w0(end-17:end-10), w0(end-9:end-8), 10, param.Ts, param.modelDerivative, param.genericA, param.genericB);
     w0(end-7:end) = fref;
 end
 
+
+% objective function (w contains N+1 x vectors and N u vectors)
+%objFunc = @(w) objFuncN(w, N);
+
 % linear inequality constraint
-[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect);
+[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect, param.constraints.ellipses, w0);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
-%[Aeq, beq] = linearConstraintsSimple(param.A, param.B, x_hat, N, param.craneParams.r, r);
-%[Aeq, beq] = third(param.A, param.B, x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.craneParams.r, param.Ts);
 
 % non-linear constraints
 % nonlcon = @(w) nonLinearConstraints(param.Ts, param.craneParams, w);

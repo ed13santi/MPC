@@ -18,7 +18,7 @@ clear variables
 perturbSize = 0.1;
 
 % The part of the core coursework that is being worked on
-partNum = 1;
+partNum = 2;
 
 
 %% Load the parameters for the Simulation model
@@ -183,3 +183,4 @@ close(hw);
 % allContTime
 [~, ~, ~, text] = analyzeCourse( [], time, states, inputs, allContTime, testCourse, r, 1 );
 fprintf(text)
+

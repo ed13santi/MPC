@@ -16,7 +16,3 @@ function [mat, ch, cl] = rectCon(rect)
     cl = [ min(a1(3),a3(3)); min(a2(3),a4(3)) ];
 end
 
-
-
-
-%% linear equality constraints

@@ -32,3 +32,7 @@ function [A,B,C,D] = genModel(m,M,MR,r,g,Tx,Ty,Vx,Vy,Ts)
         D = sysd.D;
     end
 end
+
+
+%% non-linear constraints
+

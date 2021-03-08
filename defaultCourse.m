@@ -21,7 +21,7 @@ if coursenum == 1
     target = [0.45, 0.45];
     
     Wmax = 1;
-    Tf   = 15;
+    Tf   = 10;
 elseif coursenum == 2
     % The shape for the second part
     constraints.rect = [0.00, 0.05;

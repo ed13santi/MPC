@@ -29,10 +29,6 @@ function [Fs, Fv, der] = obtainJacs(cP)
     jacA = jacobian(dx, [x1 x2 x3 x4 x5 x6 x7 x8]);
     jacB = jacobian(dx, [ux uy]);
 
-    %Fs  = @(w) double(subs(jacA, [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10)]));
-    %Fv  = @(w) double(subs(jacB, [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10)]));
-    %der = @(w) double(subs(dx  , [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10)]));
-    
     Fs  = matlabFunction(jacA, 'Vars', [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy]);
     Fv  = matlabFunction(jacB, 'Vars', [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy]);
     der = matlabFunction(dx  , 'Vars', [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy]);
@@ -41,5 +37,4 @@ function [Fs, Fv, der] = obtainJacs(cP)
     Fv  = @(w)  Fv(w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10));
     der = @(w) der(w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10));
 end
-
 

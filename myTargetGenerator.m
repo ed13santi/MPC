@@ -16,17 +16,14 @@ end
 
 t_target = t + param.N * param.Ts;
 t_reach = param.advance * param.Tf;
-delta_x = param.xTar - x_initial(1);
-delta_y = param.yTar - x_initial(3);
 r = zeros(8,1);
 if t_target >= t_reach
     % Make the crane go to (xTar, yTar)
     r(1,1) = param.xTar;
     r(3,1) = param.yTar;
 else
-    ratio = t_target / t_reach;
-    r(1,1) = x_initial(1) + ratio * delta_x;
-    r(3,1) = x_initial(3) + ratio * delta_y;
+    trgt_index = t_target / param.Ts + 1;
+    r = param.w_guess(trgt_index*10-9:trgt_index*10-2);
 end
 
 end % End of myTargetGenerator
