@@ -35,11 +35,6 @@ param.craneParams = load('Crane_NominalParameters.mat');
 
 end % End of mySetup
 
-
-
-
-
-
 function r = myTargetGenerator(x_hat, param)
 %% Modify the following function for your target generation
 
@@ -73,10 +68,6 @@ end
 
 end % End of myTargetGenerator
 
-
-
-
-
 function x_hat = myStateEstimator(u, y, param)
 %% Modify the following function for your state estimator (if desired)
 
@@ -90,10 +81,6 @@ x_hat( 1:length(y),1 ) = y;
 
 end % End of myStateEstimator
 
-
-
-
-%% Modify the following function for your controller
 function u = myMPController(r, x_hat, param)
 
 %% Do not delete this line
@@ -105,7 +92,7 @@ u = zeros(2,1);
 N = param.N;
 
 % objective function (w contains N+1 x vectors and N u vectors)
-objFunc = @(w) objFuncN(w, N);
+%objFunc = @(w) objFuncN(w, N);
 
 % inital guess w0
 persistent w0
