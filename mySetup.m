@@ -35,8 +35,3 @@ param.craneParams = load('Crane_NominalParameters.mat');
 
 end % End of mySetup
 
-
-
-
-
-

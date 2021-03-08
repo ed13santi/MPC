@@ -11,7 +11,3 @@ x_hat( 1:length(y),1 ) = y;
 
 end % End of myStateEstimator
 
-
-
-
-%% Modify the following function for your controller

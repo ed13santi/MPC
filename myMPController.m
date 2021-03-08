@@ -9,7 +9,7 @@ u = zeros(2,1);
 N = param.N;
 
 % objective function (w contains N+1 x vectors and N u vectors)
-objFunc = @(w) objFuncN(w, N);
+%objFunc = @(w) objFuncN(w, N);
 
 % inital guess w0
 persistent w0
@@ -22,7 +22,7 @@ else
 end
 
 % linear inequality constraint
-[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8));
+[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);

@@ -105,7 +105,7 @@ else
 end
 
 % linear inequality constraint
-[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8));
+[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
@@ -172,20 +172,62 @@ end
 
 
 %% linear inequality constraints
-function [A, b] = inequalityConstraints(N, r, tolerances)
-    A = zeros(4*N+8*2, 8+10*N);
-    b = zeros(4*N+8*2, 1);
+function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstraints)
+    A = zeros(12*N+8*2, 8+10*N);
+    b = zeros(12*N+8*2, 1);
+    
     for i=1:N
-        A(4*i-3,10*i-1) =  1; % u < 1
-        A(4*i-2,10*i-1) = -1; % u > 1
-        A(4*i-1,10*i) =  1; % u < 1
-        A(4*i  ,10*i) = -1; % u > 1
-        b(4*i-3:4*i) =  [1;1;1;1];
+        % input physical limits
+        A(12*i-11,10*i-1) =  1; % u < 1
+        A(12*i-10,10*i-1) = -1; % u > 1
+        A(12*i-9 ,10*i)   =  1; % u < 1
+        A(12*i-8 ,10*i)   = -1; % u > 1
+        b(12*i-11:12*i-8) =  [1;1;1;1];
+        
+        % rectangle constraints
+        [DRect,chRect,clRect] = rectCon(rectConstraints);
+        D = [ DRect(1,1) 0 DRect(1,2) 0 0                  0 0                  0; 
+              DRect(2,1) 0 DRect(2,2) 0 0                  0 0                  0;  
+              DRect(1,1) 0 DRect(1,2) 0 ropeLen*DRect(1,1) 0 ropeLen*DRect(1,2) 0;
+              DRect(2,1) 0 DRect(2,2) 0 ropeLen*DRect(2,1) 0 ropeLen*DRect(2,2) 0 ];
+        A(12*i-7:12*i-4,10*i-9:10*i-2) = D;
+        A(12*i-3:12*i,10*i-9:10*i-2) = -D;
+        b(12*i-7:12*i-4) = [chRect; chRect];
+        b(12*i-3:12*i) = [-clRect; -clRect];
     end
-    A(4*N+1:4*N+8 , 10*N+1:10*N+8) = eye(8);
-    A(4*N+9:4*N+16, 10*N+1:10*N+8) = -eye(8);
-    b(4*N+1:4*N+8)  = r + tolerances/2;
-    b(4*N+9:4*N+16) = tolerances/2 - r;
+    
+    % final position constraint
+    A(12*N+1:12*N+8 , 10*N+1:10*N+8) = eye(8);
+    A(12*N+9:12*N+16, 10*N+1:10*N+8) = -eye(8);
+    b(12*N+1:12*N+8)  = r + tolerances/2;
+    b(12*N+9:12*N+16) = tolerances/2 - r;
+end
+
+function out = linePars(a,b) 
+    if a(1) == b(1)
+    out = [-1, 0, -a(1)];
+    else
+    tmp = polyfit([a(1) b(1)],[a(2) b(2)],1);
+    out = [-tmp(1) 1 tmp(2)];
+    end
+end
+
+function [mat, ch, cl] = rectCon(rect)
+    A = rect(1,:);
+    B = rect(2,:);
+    C = rect(3,:);
+    D = rect(4,:);
+    
+    a1 = linePars(A,D);
+    a2 = linePars(A,B);
+    a3 = linePars(B,C);
+    a4 = linePars(D,C);
+    
+    mat  = [ a1(1) , a1(2);
+             a2(1) , a2(2) ];
+         
+    ch = [ max(a1(3),a3(3)); max(a2(3),a4(3)) ];
+    cl = [ min(a1(3),a3(3)); min(a2(3),a4(3)) ];
 end
 
 
@@ -293,9 +335,13 @@ function [Fs, Fv, der] = obtainJacs(cP)
     jacA = jacobian(dx, [x1 x2 x3 x4 x5 x6 x7 x8]);
     jacB = jacobian(dx, [ux uy]);
 
-    Fs  = @(w) double(subs(jacA, [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10)]));
-    Fv  = @(w) double(subs(jacB, [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10)]));
-    der = @(w) double(subs(dx  , [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy], [w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10)]));
+    Fs  = matlabFunction(jacA, 'Vars', [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy]);
+    Fv  = matlabFunction(jacB, 'Vars', [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy]);
+    der = matlabFunction(dx  , 'Vars', [x1, x2, x3, x4, x5, x6, x7, x8, ux, uy]);
+    
+    Fs  = @(w)  Fs(w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10));
+    Fv  = @(w)  Fv(w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10));
+    der = @(w) der(w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9), w(10));
 end
 
 

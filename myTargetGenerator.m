@@ -31,7 +31,3 @@ end
 
 end % End of myTargetGenerator
 
-
-
-
-
