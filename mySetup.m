@@ -42,10 +42,12 @@ param.w_guess = runInitialOptimisation(targetState, initialState, param);
 figure;
 plotx = [];
 ploty = [];
-for i=1:(length(param.w_guess)-8)/10
-   plotx = [plotx param.w_guess(i*10+1)]; 
-   ploty = [ploty param.w_guess(i*10+3)]; 
+for i=1:(length(param.w_guess)-8)/10+1
+   plotx = [plotx param.w_guess(i*10-9)]; 
+   ploty = [ploty param.w_guess(i*10-7)]; 
 end
+% plotx(1)
+% ploty(2)
 scatter(plotx, ploty);
 
 end % End of mySetup

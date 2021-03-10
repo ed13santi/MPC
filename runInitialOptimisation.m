@@ -1,10 +1,5 @@
 function w = runInitialOptimisation(finalTrgt, x_hat, param)
 
-%% Do not delete this line
-% Create the output array of the appropriate size
-u = zeros(2,1);
-%
-
 % horizon length (prediction AND control)
 N = param.Tf / param.Ts;
 
@@ -15,7 +10,7 @@ objFunc = @(w) objFuncInitialGuess(w, N);
 w0 = zeros(10*N+8, 1);
 
 % linear inequality constraint
-[A, b] = inequalityConstraintsInitialGuess(N, finalTrgt, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect, param.constraints.ellipses, w0);
+[A, b] = inequalityConstraintsInitialGuess(N, finalTrgt, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
@@ -30,6 +25,7 @@ options = optimoptions(@fmincon);
 A = sparse(A);
 Aeq = sparse(Aeq);
 w = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
+w(1:8)
 
 end % End of myMPController
 
