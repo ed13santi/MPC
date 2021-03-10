@@ -46,9 +46,9 @@ for i=1:(length(param.w_guess)-8)/10+1
    plotx = [plotx param.w_guess(i*10-9)]; 
    ploty = [ploty param.w_guess(i*10-7)]; 
 end
-% plotx(1)
-% ploty(2)
 scatter(plotx, ploty);
+
+param.w_guess(end-7:end)
 
 end % End of mySetup
 

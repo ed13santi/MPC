@@ -1,6 +1,11 @@
 function [ARows, bRows] = finalPositionRows(r, tolerances, N)
-    ARows = [ zeros(16, 10*N), [eye(8); -eye(8)] ];
-    bRows = [r + tolerances/2; tolerances/2 - r];
+    selPos = [1 0 0 0 0 0 0 0; 
+              0 0 1 0 0 0 0 0];
+    ARows = [ zeros(4, 10*N), [selPos; -selPos] ];
+    bRows = [ r(1,:) + tolerances(1,:)/2; 
+              r(3,:) + tolerances(3,:)/2; 
+              - r(1,:) + tolerances(1,:)/2; 
+              - r(3,:) + tolerances(3,:)/2 ];
 end
 
 

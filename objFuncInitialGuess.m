@@ -18,7 +18,3 @@ function out = objFuncInitialGuess(w, N)
     out = sum(maxed);
 end
 
-
-
-
-%% linear inequality constraints

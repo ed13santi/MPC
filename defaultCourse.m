@@ -29,6 +29,10 @@ elseif coursenum == 2
                         0.50, 0.05;
                         0.25, -0.20];
 
+%     ellipse.a  = 0.3;
+%     ellipse.b  = 0.3;
+%     ellipse.xc = 0.25;
+%     ellipse.yc = -0.20;
     ellipse.a  = 0.3;
     ellipse.b  = 0.3;
     ellipse.xc = 0.25;

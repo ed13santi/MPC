@@ -18,3 +18,5 @@ function out = objFuncN(w, N)
 %     out = sum(maxed);
 end
 
+
+%% linear inequality constraints

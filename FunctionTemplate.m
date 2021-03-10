@@ -46,9 +46,9 @@ for i=1:(length(param.w_guess)-8)/10+1
    plotx = [plotx param.w_guess(i*10-9)]; 
    ploty = [ploty param.w_guess(i*10-7)]; 
 end
-% plotx(1)
-% ploty(2)
 scatter(plotx, ploty);
+
+param.w_guess(end-7:end)
 
 end % End of mySetup
 
@@ -181,35 +181,13 @@ function out = objFuncN(w, N)
 %     out = sum(maxed);
 end
 
-function out = objFuncInitialGuess(w, N)
-%     penalties = zeros(8+10*N,1);
-%     for i=1:N
-%        penalties(10*i-1:10*i) = ones(2,1); 
-%     end
-%     out = w' * diag(penalties) * w;
-    vels = zeros(2*(N+1), 1);
-    us = zeros(2*N, 1);
-    for i = 1:N
-        vels(2*i-1:2*i, 1) = w(10*i-8:2:10*i-6);
-        us(2*i-1:2*i, 1) = w(10*i-1:10*i);
-    end
-    vels(2*(N+1)-1:2*(N+1), 1) = w(10*(N+1)-8:2:10*(N+1)-6);
-    
-    vels = vels(3:end,1) + vels(1:end-2,1);
-    prods = us .* vels;
-    maxed = max(prods,[],2);
-    out = sum(maxed);
-end
-
-
-
 
 %% linear inequality constraints
 function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstraints, ellipses, w)
     A = zeros(0, 8+10*N);
     b = zeros(0, 1);
     
-    for i=1:N
+    for i=1:N-1
         % input physical limits
         [A1, b1] = physicalLims;
         
@@ -220,7 +198,7 @@ function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstrain
         [A3, b3] = ellipseLimsRows(ellipses, w(10*i-9), w(10*i-7));
         
         A_tmp = [A1;A2;A3];
-        A_tmp2 = [zeros(size(A_tmp,1), i*10-10), A_tmp, zeros(size(A_tmp,1), 8+10*N-i*10)];
+        A_tmp2 = [zeros(size(A_tmp,1), i*10), A_tmp, zeros(size(A_tmp,1), 8+10*N-i*10-10)];
         A = [A; A_tmp2];
         b = [b; b1;b2;b3];
     end
@@ -299,8 +277,13 @@ function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b)
 end
 
 function [ARows, bRows] = finalPositionRows(r, tolerances, N)
-    ARows = [ zeros(16, 10*N), [eye(8); -eye(8)] ];
-    bRows = [r + tolerances/2; tolerances/2 - r];
+    selPos = [1 0 0 0 0 0 0 0; 
+              0 0 1 0 0 0 0 0];
+    ARows = [ zeros(4, 10*N), [selPos; -selPos] ];
+    bRows = [ r(1,:) + tolerances(1,:)/2; 
+              r(3,:) + tolerances(3,:)/2; 
+              - r(1,:) + tolerances(1,:)/2; 
+              - r(3,:) + tolerances(3,:)/2 ];
 end
 
 
@@ -409,37 +392,24 @@ function out = ellipseEval(x, y, xc, yc, a, b)
     out = ((x - xc)/a)^2 + ((y - yc)/b)^2 - 1;
 end
 
-function xVec = w2allX(w)
-    N = (length(w)-8)/10;
-    xVec = zeros(N+1,1);
-    for i=0:N
-        xVec(i+1) = w(10*i+1);
-    end
-end
-
-function yVec = w2allY(w)
-    N = (length(w)-8)/10;
-    yVec = zeros(N+1,1);
-    for i=0:N
-        yVec(i+1) = w(10*i+3);
-    end
-end
-
-function [c, ceq] = nonLinearConstraints(ellipses, dt, Ts, w)
+function [c, ceq] = nonLinearConstraints(ellConstr, ellipses, dt, Ts, w)
     % inequality constraints for ellipses
-%     N = (length(w)-8)/10;
-%     c = zeros(N*size(ellipses,1)*size(ellipses,2),1);
-%     xVec = w2allX(w);
-%     yVec = w2allY(w);
-%     for i=1:N+1
-%         for j=1:size(ellipses,1)
-%             for z=1:size(ellipses,2)
-%                 ell = ellipses{j,z};
-%                 c(i) = - ellipseEval(xVec(i), yVec(i), ell.xc, ell.yc, ell.a, ell.b);
-%             end
-%         end
-%     end
-    c = [];
+    if ellConstr == true
+        N = (length(w)-8)/10;
+        c = [];
+        for i=1:N-1
+            x = w(10*i+1);
+            y = w(10*i+3);
+            for j=1:size(ellipses,1)
+                for z=1:size(ellipses,2)
+                    ell = ellipses{j,z};
+                    c = [c; - ellipseEval(x, y, ell.xc, ell.yc, ell.a, ell.b)];
+                end
+            end
+        end
+    else
+        c = [];
+    end
     
     % equality constraints due to dynamics of system
     ceq = w2x(w) - doStep(w, dt, Ts); % IF REACTIVATE THIS, NEED TO REMOVE
@@ -449,6 +419,26 @@ end
 
 %% run initial optimisation
 
+function out = objFuncInitialGuess(w, N)
+%     penalties = zeros(8+10*N,1);
+%     for i=1:N
+%        penalties(10*i-1:10*i) = ones(2,1); 
+%     end
+%     out = w' * diag(penalties) * w;
+    vels = zeros(2*(N+1), 1);
+    us = zeros(2*N, 1);
+    for i = 1:N
+        vels(2*i-1:2*i, 1) = w(10*i-8:2:10*i-6);
+        us(2*i-1:2*i, 1) = w(10*i-1:10*i);
+    end
+    vels(2*(N+1)-1:2*(N+1), 1) = w(10*(N+1)-8:2:10*(N+1)-6);
+    
+    vels = vels(3:end,1) + vels(1:end-2,1);
+    prods = us .* vels;
+    maxed = max(prods,[],2);
+    out = sum(maxed);
+end
+
 function w = runInitialOptimisation(finalTrgt, x_hat, param)
 
 % horizon length (prediction AND control)
@@ -457,30 +447,33 @@ N = param.Tf / param.Ts;
 % objective function (w contains N+1 x vectors and N u vectors)
 objFunc = @(w) objFuncInitialGuess(w, N);
 
-% inital guess w0
-w0 = zeros(10*N+8, 1);
+% initial guess w0
+w0 = [x_hat; zeros(10*N, 1)];
+for i=1:N
+    w0(10*i+1:10*i+8) = (finalTrgt - x_hat) / N * i + x_hat;
+end
 
 % linear inequality constraint
-[A, b] = inequalityConstraintsInitialGuess(N, finalTrgt, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect);
+[A, b] = inequalityConstraintsInitialGuess(N, param.craneParams.r, param.constraints.rect);
 
 % linear equality constraints (currently only equality constraint on x0)
-[Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
+[Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts, finalTrgt);
 
 % non-linear constraints
-nonlcon = @(w) nonLinearConstraints(param.constraints.ellipses, param.modelDerivative, param.Ts, w);
+nonlcon = @(w) nonLinearConstraints(true, param.constraints.ellipses, param.modelDerivative, param.Ts, w);
 
 % options
-options = optimoptions(@fmincon);
+options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);
 
 % optimisation
 A = sparse(A);
 Aeq = sparse(Aeq);
 w = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
-w(1:8)
+%w(1:8)
 
 end % End of myMPController
 
-function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts)
+function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts, r)
     xus = [x0; w0(9:end-8)];
     Aeq = zeros(8+8*N, length(w0));
     beq = zeros(8+8*N, 1);
@@ -488,6 +481,7 @@ function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts)
     Aeq(1:8,1:8) = eye(8);
     beq(1:8) = x0;
        
+    % Linear model dynamics
 %     for i=1:N
 %        x = xus(i*10-9:i*10-2);
 %        u = xus(i*10-1:i*10);
@@ -497,27 +491,33 @@ function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts)
 %        Aeq(8+i*8-7:8+i*8, i*10+1:i*10+8) = - eye(8);
 %        beq(8+i*8-7:8+i*8) = A*x + B*u - fref;
 %     end
+
+    % final position constraint
+    [A_tmp, b_tmp] = finalPositionRowsInitGuess(r, N);
+    Aeq = [Aeq; A_tmp];
+    beq = [beq; b_tmp];
 end
 
-function [A, b] = inequalityConstraintsInitialGuess(N, r, tolerances, ropeLen, rectConstraints)
+function [A, b] = inequalityConstraintsInitialGuess(N, ropeLen, rectConstraints)
     A = zeros(0, 8+10*N);
     b = zeros(0, 1);
     
-    for i=1:N
+    for i=1:N-1
         % input physical limits
-%         [A1, b1] = physicalLims;
-%         
-%         % rectangle constraints
-%         [A2, b2] = rectLimsRows(rectConstraints, ropeLen);
-%         
-%         A_tmp = [A1;A2];
-%         A_tmp2 = [zeros(size(A_tmp,1), i*10-10), A_tmp, zeros(size(A_tmp,1), 8+10*N-i*10)];
-%         A = [A; A_tmp2];
-%         b = [b; b1;b2];
+        [A1, b1] = physicalLims;
+        
+        % rectangle constraints
+        [A2, b2] = rectLimsRows(rectConstraints, ropeLen);
+        
+        % combine matrices
+        A_tmp = [A1;A2];
+        A_tmp2 = [zeros(size(A_tmp,1), i*10), A_tmp, zeros(size(A_tmp,1), 8+10*N-i*10-10)];
+        A = [A; A_tmp2];
+        b = [b; b1;b2];
     end
-    
-    % final position constraint
-    [A_tmp, b_tmp] = finalPositionRows(r, tolerances, N);
-    A = [A; A_tmp];
-    b = [b; b_tmp];
+end
+
+function [ARows, bRows] = finalPositionRowsInitGuess(r, N)
+    ARows = [ zeros(8, 10*N), eye(8) ];
+    bRows = r;
 end
