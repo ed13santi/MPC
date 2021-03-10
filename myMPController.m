@@ -52,11 +52,13 @@ Aeq = sparse(Aeq);
 % H = sparse(H);
 % options = optimoptions('fmincon','Algorithm','interior-point');
 % w = quadprog(H,zeros(1,size(A,2)),A,b,Aeq,beq);
-penalties = zeros(8+10*N,1);
-for i=1:N
-    penalties(10*i-1:10*i) = ones(2,1); 
-end
-w = quadprog(diag(penalties),zeros(1,length(penalties)),A,b,Aeq,beq);
+penalties = ones(8+10*N,1);
+H = diag(penalties);
+extraCopies = 20 / param.Ts + N - (length(param.w_guess) - 8)/10;
+wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
+refTraj = wref(iter*10+1:(iter+N)*10+8);
+f = - H * refTraj;
+w = quadprog(H,f,A,b,Aeq,beq);
 
 % extract u from w
 u = w(9:10);

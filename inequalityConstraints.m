@@ -18,17 +18,19 @@ function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstrain
         A = [A; A_tmp2];
         b = [b; b1;b2;b3];
         
-        if N - i < n_final_pos_constrs
-            % final position constraint
-            [A4, b4] = finalPositionRows(r, tolerances, i, N);
-            A = [A; A4];
-            b = [b; b4];
-        end
+%         if N - i < n_final_pos_constrs
+%             % final position constraint
+%             [A4, b4] = finalPositionRows(r, tolerances, i, N);
+%             A = [A; A4];
+%             b = [b; b4];
+%         end
     end
     
-    % final position constraint
-    [A_tmp, b_tmp] = finalPositionRows(r, tolerances, N, N);
-    A = [A; A_tmp];
-    b = [b; b_tmp];
+%     if n_final_pos_constrs > 0
+%         % final position constraint
+%         [A_tmp, b_tmp] = finalPositionRows(r, tolerances, N, N);
+%         A = [A; A_tmp];
+%         b = [b; b_tmp];
+%     end
 end
 

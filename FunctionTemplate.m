@@ -12,7 +12,7 @@ param.Wmax = shape.Wmax;
 param.Tf = shape.Tf;    
 
 % This is how to set the sampling interval
-param.Ts = 0.05;
+param.Ts = 0.1;
 
 % This is a sample way to send reference points
 param.xTar = shape.target(1);
@@ -149,11 +149,13 @@ Aeq = sparse(Aeq);
 % H = sparse(H);
 % options = optimoptions('fmincon','Algorithm','interior-point');
 % w = quadprog(H,zeros(1,size(A,2)),A,b,Aeq,beq);
-penalties = zeros(8+10*N,1);
-for i=1:N
-    penalties(10*i-1:10*i) = ones(2,1); 
-end
-w = quadprog(diag(penalties),zeros(1,length(penalties)),A,b,Aeq,beq);
+penalties = ones(8+10*N,1);
+H = diag(penalties);
+extraCopies = 20 / param.Ts + N - (length(param.w_guess) - 8)/10;
+wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
+refTraj = wref(iter*10+1:(iter+N)*10+8);
+f = - H * refTraj;
+w = quadprog(H,f,A,b,Aeq,beq);
 
 % extract u from w
 u = w(9:10);
@@ -210,18 +212,20 @@ function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstrain
         A = [A; A_tmp2];
         b = [b; b1;b2;b3];
         
-        if N - i < n_final_pos_constrs
-            % final position constraint
-            [A4, b4] = finalPositionRows(r, tolerances, i, N);
-            A = [A; A4];
-            b = [b; b4];
-        end
+%         if N - i < n_final_pos_constrs
+%             % final position constraint
+%             [A4, b4] = finalPositionRows(r, tolerances, i, N);
+%             A = [A; A4];
+%             b = [b; b4];
+%         end
     end
     
-    % final position constraint
-    [A_tmp, b_tmp] = finalPositionRows(r, tolerances, N, N);
-    A = [A; A_tmp];
-    b = [b; b_tmp];
+%     if n_final_pos_constrs > 0
+%         % final position constraint
+%         [A_tmp, b_tmp] = finalPositionRows(r, tolerances, N, N);
+%         A = [A; A_tmp];
+%         b = [b; b_tmp];
+%     end
 end
 
 function out = linePars(a,b) 

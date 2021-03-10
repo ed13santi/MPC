@@ -12,7 +12,7 @@ param.Wmax = shape.Wmax;
 param.Tf = shape.Tf;    
 
 % This is how to set the sampling interval
-param.Ts = 0.05;
+param.Ts = 0.1;
 
 % This is a sample way to send reference points
 param.xTar = shape.target(1);
