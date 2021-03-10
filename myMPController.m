@@ -18,12 +18,19 @@ else
     w0(end-7:end) = fref;
 end
 
+persistent iter
+if isempty(iter)
+    iter = 0;
+else
+    iter = iter + 1;
+end
 
 % objective function (w contains N+1 x vectors and N u vectors)
 %objFunc = @(w) objFuncN(w, N);
 
 % linear inequality constraint
-[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect, param.constraints.ellipses, w0);
+n_at_equilibrium = 0; %max(0, min(N, iter - param.Tf / param.Ts + 1));
+[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect, param.constraints.ellipses, w0, n_at_equilibrium);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);

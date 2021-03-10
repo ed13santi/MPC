@@ -46,9 +46,9 @@ for i=1:(length(param.w_guess)-8)/10+1
    plotx = [plotx param.w_guess(i*10-9)]; 
    ploty = [ploty param.w_guess(i*10-7)]; 
 end
-% plotx(1)
-% ploty(2)
 scatter(plotx, ploty);
+
+param.w_guess(end-7:end)
 
 end % End of mySetup
 
@@ -78,8 +78,6 @@ if t_target >= t_reach
 else
     trgt_index = t_target / param.Ts + 1;
     r = param.w_guess(trgt_index*10-9:trgt_index*10-2);
-    %r(1)
-    %r(3)
 end
 
 end % End of myTargetGenerator
@@ -117,12 +115,19 @@ else
     w0(end-7:end) = fref;
 end
 
+persistent iter
+if isempty(iter)
+    iter = 0;
+else
+    iter = iter + 1;
+end
 
 % objective function (w contains N+1 x vectors and N u vectors)
 %objFunc = @(w) objFuncN(w, N);
 
 % linear inequality constraint
-[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect, param.constraints.ellipses, w0);
+n_at_equilibrium = iter - param.Tf / param.Ts + 1;
+[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect, param.constraints.ellipses, w0, n_at_equilibirum);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
@@ -197,7 +202,7 @@ function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstrain
         [A2, b2] = rectLimsRows(rectConstraints, ropeLen);
         
         % ellipse constraints
-        [A3, b3] = ellipseLimsRows(ellipses, w(10*i-9), w(10*i-7));
+        [A3, b3] = ellipseLimsRows(ellipses, w(10*i+1), w(10*i+3));
         
         A_tmp = [A1;A2;A3];
         A_tmp2 = [zeros(size(A_tmp,1), i*10), A_tmp, zeros(size(A_tmp,1), 8+10*N-i*10-10)];
@@ -274,16 +279,18 @@ function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b)
     alpha = ellipseEval(xg, yg, xc, yc, a, b);
     beta = 2 * (xg - xc) / (a^2);
     gamma = 2 *(yg - yc) / (b^2);
-    ARow = [-beta 0 -gamma 0 0 0 0 0 0 0];
+    ARow = [ -beta, 0, -gamma, 0, 0, 0, 0, 0, 0, 0 ];
     bRow = alpha - beta * xg - gamma * yg;
 end
 
 function [ARows, bRows] = finalPositionRows(r, tolerances, N)
-    ARows = [ zeros(4, 10*N), [eye(2); -eye(2)] ];
-    bRows = [r(1,:) + tolerances(1,:)/2; 
-             r(3,:) + tolerances(3,:)/2; 
-             - r(1,:) + tolerances(1,:)/2; 
-             - r(3,:) + tolerances(3,:)/2 ];
+    selPos = [1 0 0 0 0 0 0 0; 
+              0 0 1 0 0 0 0 0];
+    ARows = [ zeros(4, 10*N), [selPos; -selPos] ];
+    bRows = [ r(1,:) + tolerances(1,:)/2; 
+              r(3,:) + tolerances(3,:)/2; 
+              - r(1,:) + tolerances(1,:)/2; 
+              - r(3,:) + tolerances(3,:)/2 ];
 end
 
 
@@ -454,10 +461,10 @@ for i=1:N
 end
 
 % linear inequality constraint
-[A, b] = inequalityConstraintsInitialGuess(N, finalTrgt, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect);
+[A, b] = inequalityConstraintsInitialGuess(N, param.craneParams.r, param.constraints.rect);
 
 % linear equality constraints (currently only equality constraint on x0)
-[Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
+[Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts, finalTrgt);
 
 % non-linear constraints
 nonlcon = @(w) nonLinearConstraints(true, param.constraints.ellipses, param.modelDerivative, param.Ts, w);
@@ -473,7 +480,7 @@ w = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
 
 end % End of myMPController
 
-function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts)
+function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts, r)
     xus = [x0; w0(9:end-8)];
     Aeq = zeros(8+8*N, length(w0));
     beq = zeros(8+8*N, 1);
@@ -481,6 +488,7 @@ function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts)
     Aeq(1:8,1:8) = eye(8);
     beq(1:8) = x0;
        
+    % Linear model dynamics
 %     for i=1:N
 %        x = xus(i*10-9:i*10-2);
 %        u = xus(i*10-1:i*10);
@@ -490,9 +498,14 @@ function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts)
 %        Aeq(8+i*8-7:8+i*8, i*10+1:i*10+8) = - eye(8);
 %        beq(8+i*8-7:8+i*8) = A*x + B*u - fref;
 %     end
+
+    % final position constraint
+    [A_tmp, b_tmp] = finalPositionRowsInitGuess(r, N);
+    Aeq = [Aeq; A_tmp];
+    beq = [beq; b_tmp];
 end
 
-function [A, b] = inequalityConstraintsInitialGuess(N, r, tolerances, ropeLen, rectConstraints)
+function [A, b] = inequalityConstraintsInitialGuess(N, ropeLen, rectConstraints)
     A = zeros(0, 8+10*N);
     b = zeros(0, 1);
     
@@ -503,14 +516,15 @@ function [A, b] = inequalityConstraintsInitialGuess(N, r, tolerances, ropeLen, r
         % rectangle constraints
         [A2, b2] = rectLimsRows(rectConstraints, ropeLen);
         
+        % combine matrices
         A_tmp = [A1;A2];
         A_tmp2 = [zeros(size(A_tmp,1), i*10), A_tmp, zeros(size(A_tmp,1), 8+10*N-i*10-10)];
         A = [A; A_tmp2];
         b = [b; b1;b2];
     end
-    
-    % final position constraint
-    [A_tmp, b_tmp] = finalPositionRows(r, tolerances, N);
-    A = [A; A_tmp];
-    b = [b; b_tmp];
+end
+
+function [ARows, bRows] = finalPositionRowsInitGuess(r, N)
+    ARows = [ zeros(8, 10*N), eye(8) ];
+    bRows = r;
 end

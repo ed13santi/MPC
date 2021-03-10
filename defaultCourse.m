@@ -33,8 +33,8 @@ elseif coursenum == 2
 %     ellipse.b  = 0.3;
 %     ellipse.xc = 0.25;
 %     ellipse.yc = -0.20;
-    ellipse.a  = 0.3;
-    ellipse.b  = 0.3;
+    ellipse.a  = 0.03;
+    ellipse.b  = 0.03;
     ellipse.xc = 0.25;
     ellipse.yc = -0.20;
 

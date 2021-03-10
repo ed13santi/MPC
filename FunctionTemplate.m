@@ -12,7 +12,7 @@ param.Wmax = shape.Wmax;
 param.Tf = shape.Tf;    
 
 % This is how to set the sampling interval
-param.Ts = 0.1;
+param.Ts = 0.05;
 
 % This is a sample way to send reference points
 param.xTar = shape.target(1);
@@ -115,12 +115,19 @@ else
     w0(end-7:end) = fref;
 end
 
+persistent iter
+if isempty(iter)
+    iter = 0;
+else
+    iter = iter + 1;
+end
 
 % objective function (w contains N+1 x vectors and N u vectors)
 %objFunc = @(w) objFuncN(w, N);
 
 % linear inequality constraint
-[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect, param.constraints.ellipses, w0);
+n_at_equilibrium = 0; %max(0, min(N, iter - param.Tf / param.Ts + 1));
+[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect, param.constraints.ellipses, w0, n_at_equilibrium);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
@@ -183,7 +190,7 @@ end
 
 
 %% linear inequality constraints
-function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstraints, ellipses, w)
+function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstraints, ellipses, w, n_final_pos_constrs)
     A = zeros(0, 8+10*N);
     b = zeros(0, 1);
     
@@ -195,16 +202,24 @@ function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstrain
         [A2, b2] = rectLimsRows(rectConstraints, ropeLen);
         
         % ellipse constraints
-        [A3, b3] = ellipseLimsRows(ellipses, w(10*i-9), w(10*i-7));
+        [A3, b3] = ellipseLimsRows(ellipses, w(10*i+1), w(10*i+3));
+        
         
         A_tmp = [A1;A2;A3];
         A_tmp2 = [zeros(size(A_tmp,1), i*10), A_tmp, zeros(size(A_tmp,1), 8+10*N-i*10-10)];
         A = [A; A_tmp2];
         b = [b; b1;b2;b3];
+        
+        if N - i < n_final_pos_constrs
+            % final position constraint
+            [A4, b4] = finalPositionRows(r, tolerances, i, N);
+            A = [A; A4];
+            b = [b; b4];
+        end
     end
     
     % final position constraint
-    [A_tmp, b_tmp] = finalPositionRows(r, tolerances, N);
+    [A_tmp, b_tmp] = finalPositionRows(r, tolerances, N, N);
     A = [A; A_tmp];
     b = [b; b_tmp];
 end
@@ -272,14 +287,14 @@ function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b)
     alpha = ellipseEval(xg, yg, xc, yc, a, b);
     beta = 2 * (xg - xc) / (a^2);
     gamma = 2 *(yg - yc) / (b^2);
-    ARow = [-beta 0 -gamma 0 0 0 0 0 0 0];
+    ARow = [ -beta, 0, -gamma, 0, 0, 0, 0, 0, 0, 0 ];
     bRow = alpha - beta * xg - gamma * yg;
 end
 
-function [ARows, bRows] = finalPositionRows(r, tolerances, N)
+function [ARows, bRows] = finalPositionRows(r, tolerances, i, N)
     selPos = [1 0 0 0 0 0 0 0; 
               0 0 1 0 0 0 0 0];
-    ARows = [ zeros(4, 10*N), [selPos; -selPos] ];
+    ARows = [ zeros(4, 10*i), [selPos; -selPos], zeros(4, 10*N-10*i) ];
     bRows = [ r(1,:) + tolerances(1,:)/2; 
               r(3,:) + tolerances(3,:)/2; 
               - r(1,:) + tolerances(1,:)/2; 
