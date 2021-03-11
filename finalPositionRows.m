@@ -8,7 +8,3 @@ function [ARows, bRows] = finalPositionRows(r, tolerances, i, N)
               - r(3,:) + tolerances(3,:)/2 ];
 end
 
-
-
-
-%% linear equality constraints

@@ -1,6 +1,11 @@
-function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstraints, ellipses, w, n_final_pos_constrs)
-    A = zeros(0, 8+10*N);
-    b = zeros(0, 1);
+function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectConstraints, ellipses, w, n_final)
+    if n_final < N + 1
+        A = zeros(0, 8+10*N);
+        b = zeros(0, 1);
+    else
+        A = [ zeros(4,8), [eye(2); -eye(2)], zeros(4,10*(N-1)+8) ];
+        b = [ tolInput; tolInput ];
+    end
     
     for i=1:N-1
         % input physical limits
@@ -18,19 +23,19 @@ function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstrain
         A = [A; A_tmp2];
         b = [b; b1;b2;b3];
         
-%         if N - i < n_final_pos_constrs
-%             % final position constraint
-%             [A4, b4] = finalPositionRows(r, tolerances, i, N);
-%             A = [A; A4];
-%             b = [b; b4];
-%         end
+        if N - i < n_final
+            % final state/input constraint
+            [A4, b4] = finalRows(r, tolState, tolInput, i, N);
+            A = [A; A4];
+            b = [b; b4];
+        end
     end
     
-%     if n_final_pos_constrs > 0
-%         % final position constraint
-%         [A_tmp, b_tmp] = finalPositionRows(r, tolerances, N, N);
-%         A = [A; A_tmp];
-%         b = [b; b_tmp];
-%     end
+    if n_final > 0
+        % final state/input constraint
+        [A_tmp, b_tmp] = finalRows(r, tolState, tolInput, N, N);
+        A = [A; A_tmp];
+        b = [b; b_tmp];
+    end
 end
 

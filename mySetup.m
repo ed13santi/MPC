@@ -25,9 +25,6 @@ targetState  = [param.xTar;     0; param.yTar;     0; 0; 0; 0; 0];
 % Horizon length
 param.N = 15;
 
-% How much before Ts to contraint final position
-param.advance = 0.95;
-
 % Load model parameters and calculate matrices
 param.craneParams = load('Crane_NominalParameters.mat');
 
@@ -37,7 +34,8 @@ param.craneParams = load('Crane_NominalParameters.mat');
 
 %Run initial optimisation over whole length of episode using fully
 %non-linear model
-param.w_guess = runInitialOptimisation(targetState, initialState, param);
+param.TsFactor = 5;
+param.w_guess = runInitialOptimisation(targetState, initialState, param, param.TsFactor);
 
 figure;
 plotx = [];
@@ -48,7 +46,8 @@ for i=1:(length(param.w_guess)-8)/10+1
 end
 scatter(plotx, ploty);
 
-param.w_guess(end-7:end)
+extraCopies = 20 / param.Ts + param.N - (length(param.w_guess) - 8)/10 + param.TsFactor;
+param.w_ref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
 
 end % End of mySetup
 

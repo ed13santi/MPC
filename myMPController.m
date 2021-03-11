@@ -9,16 +9,16 @@ u = zeros(2,1);
 N = param.N;
 
 % inital guess w0
-% persistent w0
-% if isempty(w0)
-%     w0 = param.w_guess(1:10*N+8);
-% else
-%     w0(1:end-10) = w0(11:end);
-%     [~, ~, fref] = getLinearisation(w0(end-17:end-10), w0(end-9:end-8), 10, param.Ts, param.modelDerivative, param.genericA, param.genericB);
-%     w0(end-7:end) = fref;
-% end
-extraCopies = 20 / param.Ts + N - (length(param.w_guess) - 8)/10;
-wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
+persistent w0
+if isempty(w0)
+    w0 = param.w_ref(1:10*N+8);
+else
+    w0(1:end-10) = w0(11:end);
+    [~, ~, fref] = getLinearisation(w0(end-17:end-10), w0(end-9:end-8), 10, param.Ts, param.modelDerivative, param.genericA, param.genericB);
+    w0(end-7:end) = fref;
+end
+
+
 
 persistent iter
 if isempty(iter)
@@ -27,15 +27,20 @@ else
     iter = iter + 1;
 end
 
-w0 = wref(iter*10+1:(iter+N)*10+8);
+% w0 = param.wref(iter*10+1:(iter+N)*10+8);
 
 
 % objective function (w contains N+1 x vectors and N u vectors)
 %objFunc = @(w) objFuncN(w, N);
 
 % linear inequality constraint
-n_at_equilibrium = 0; %max(0, min(N, iter - param.Tf / param.Ts + 1));
-[A, b] = inequalityConstraints(N, r, param.tolerances.state(1:8), param.craneParams.r, param.constraints.rect, param.constraints.ellipses, w0, n_at_equilibrium);
+stateTol = param.tolerances.state(1:8);
+inputTol = param.tolerances.input(1:2);
+ropeLen =  param.craneParams.r;
+rectConstr = param.constraints.rect;
+ellConstr = param.constraints.ellipses;
+n_at_equilibrium = max(0, iter - param.Tf / param.Ts + param.TsFactor + N);
+[A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, w0, n_at_equilibrium);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
@@ -57,7 +62,11 @@ Aeq = sparse(Aeq);
 % H = sparse(H);
 % options = optimoptions('fmincon','Algorithm','interior-point');
 % w = quadprog(H,zeros(1,size(A,2)),A,b,Aeq,beq);
-penalties = ones(8+10*N,1);
+
+% penBlock = [ones(10,1); zeros(10*(param.TsFactor-1),1)];
+% n_blocks = N/param.TsFactor;
+% penalties = [kron(ones(n_blocks,1), penBlock); ones(8,1)];
+penalties = ones(10*N+8, 1);
 H = diag(penalties);
 
 refTraj = wref(iter*10+1:(iter+N)*10+8);

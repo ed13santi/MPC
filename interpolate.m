@@ -5,7 +5,7 @@ function w_out = interpolate(w, factor) %how does interp work
     w = reshape(w,[10,N]);
     w_out = [];
     for i=1:10
-        interpolatedVec = interp1(1:N, w(i,:), 1:intStep:N,'cubic');
+        interpolatedVec = interp1(1:N, w(i,:), 1:intStep:N,'linear');
         w_out = [ w_out; interpolatedVec ];
     end
     w_out = reshape(w_out,[],1) ;
