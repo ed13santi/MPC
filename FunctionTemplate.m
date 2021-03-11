@@ -106,14 +106,16 @@ u = zeros(2,1);
 N = param.N;
 
 % inital guess w0
-persistent w0
-if isempty(w0)
-    w0 = param.w_guess(1:10*N+8);
-else
-    w0(1:end-10) = w0(11:end);
-    [~, ~, fref] = getLinearisation(w0(end-17:end-10), w0(end-9:end-8), 10, param.Ts, param.modelDerivative, param.genericA, param.genericB);
-    w0(end-7:end) = fref;
-end
+% persistent w0
+% if isempty(w0)
+%     w0 = param.w_guess(1:10*N+8);
+% else
+%     w0(1:end-10) = w0(11:end);
+%     [~, ~, fref] = getLinearisation(w0(end-17:end-10), w0(end-9:end-8), 10, param.Ts, param.modelDerivative, param.genericA, param.genericB);
+%     w0(end-7:end) = fref;
+% end
+extraCopies = 20 / param.Ts + N - (length(param.w_guess) - 8)/10;
+wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
 
 persistent iter
 if isempty(iter)
@@ -121,6 +123,9 @@ if isempty(iter)
 else
     iter = iter + 1;
 end
+
+w0 = wref(iter*10+1:(iter+N)*10+8);
+
 
 % objective function (w contains N+1 x vectors and N u vectors)
 %objFunc = @(w) objFuncN(w, N);
@@ -151,8 +156,7 @@ Aeq = sparse(Aeq);
 % w = quadprog(H,zeros(1,size(A,2)),A,b,Aeq,beq);
 penalties = ones(8+10*N,1);
 H = diag(penalties);
-extraCopies = 20 / param.Ts + N - (length(param.w_guess) - 8)/10;
-wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
+
 refTraj = wref(iter*10+1:(iter+N)*10+8);
 f = - H * refTraj;
 w = quadprog(H,f,A,b,Aeq,beq);
@@ -207,10 +211,10 @@ function [A, b] = inequalityConstraints(N, r, tolerances, ropeLen, rectConstrain
         [A3, b3] = ellipseLimsRows(ellipses, w(10*i+1), w(10*i+3));
         
         
-        A_tmp = [A1;A2];
+        A_tmp = [A1;A2;A3];
         A_tmp2 = [zeros(size(A_tmp,1), i*10), A_tmp, zeros(size(A_tmp,1), 8+10*N-i*10-10)];
         A = [A; A_tmp2];
-        b = [b; b1;b2];
+        b = [b; b1;b2;b3];
         
 %         if N - i < n_final_pos_constrs
 %             % final position constraint
