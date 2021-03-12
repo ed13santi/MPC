@@ -156,7 +156,7 @@ persistent prevW
 if isempty(prevW)
     refTraj = [x_hat(1:8); param.wref((iter+1)*10+9:(iter+N+1)*10+8)];
 else
-    refTraj = [x_hat(1:8); prevW(19:end); param.wref((iter+N)*10+1:(iter+N)*10+8)];
+    refTraj = [x_hat(1:8); prevW(19:end); param.wref((iter+N+1)*10-1:(iter+N+1)*10+8)];
 end
 
 %refTraj = param.wref(iter*10+1:(iter+N)*10+8);
@@ -297,17 +297,29 @@ function [ARows, bRows] = rectLimsRows(rectConstraints, ropeLen, thetag, phig)
 end
 
 function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phig)
-    ARows = zeros(0,10);
-    bRows = zeros(0,1);
+    ellList = [];
+    ellVals = [];
+    ellObjVals = [];
     for j=1:size(ellipses,1)
         for z=1:size(ellipses,2)
             ell = ellipses{j,z};
-            [ARow1, bRow1] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b);
-            [ARow2, bRow2] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, ell.xc, ell.yc, ell.a, ell.b);
-            ARows = [ARows; ARow1; ARow2];
-            bRows = [bRows; bRow1; bRow2];
+            ellList = [ ellList; ell ];
+            ellVals = ellipseEval(xg, yg, ell.xc, ell.yc, ell.a, ell.b);
+            ellObjVals = ellipseEval(xg+ropeLen*sin(thetag), yg+ropeLen*sin(thetag), ell.xc, ell.yc, ell.a, ell.b);
         end
     end
+    
+    
+    ARows = zeros(length(ellList)*2,10);
+    bRows = zeros(length(ellList)*2,1);
+    
+    for ellInd=1:length(ellList)
+        ell = ellList(ellInd);
+        [ARow1, bRow1] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b);
+        [ARow2, bRow2] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, ell.xc, ell.yc, ell.a, ell.b);
+        ARows = [ARows; ARow1; ARow2];
+        bRows = [bRows; bRow1; bRow2];
+    end 
 end
 
 function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b)
