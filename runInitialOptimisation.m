@@ -20,7 +20,7 @@ end
 [Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, Ts, finalTrgt);
 
 % non-linear constraints
-nonlcon = @(w) nonLinearConstraints(param.craneParams.r, true, param.constraints.ellipses, param.modelDerivative, Ts, w);
+nonlcon = @(w) nonLinearConstraints(param.constraints.rect, param.craneParams.r, true, param.constraints.ellipses, param.modelDerivative, Ts, w);
 
 % options
 options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);

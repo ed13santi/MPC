@@ -7,7 +7,7 @@ function [A, b] = inequalityConstraintsInitialGuess(N, ropeLen, rectConstraints,
         [A1, b1] = physicalLims;
         
         % rectangle constraints
-        [A2, b2] = rectLimsRows(rectConstraints, ropeLen);
+        [A2, b2] = rectLimsRowsInitialGuess(rectConstraints);
         
         % combine matrices
         A_tmp = [A1;A2];

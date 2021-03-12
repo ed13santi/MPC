@@ -195,7 +195,7 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
         [A1, b1] = physicalLims;
         
         % rectangle constraints
-        [A2, b2] = rectLimsRows(rectConstraints, ropeLen);
+        [A2, b2] = rectLimsRows(rectConstraints, ropeLen, w(10*i+5), w(10*i+7));
         
         % ellipse constraints
         [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7));
@@ -258,14 +258,23 @@ function [ARows, bRows] = physicalLims()
     bRows = [1;1;1;1];
 end
 
-function [ARows, bRows] = rectLimsRows(rectConstraints, ropeLen)
+function [ARows, bRows] = rectLimsRows(rectConstraints, ropeLen, thetag, phig)
     [DRect,chRect,clRect] = rectCon(rectConstraints);
-    D = [ DRect(1,1) 0 DRect(1,2) 0 0                  0 0                  0 0 0; 
-          DRect(2,1) 0 DRect(2,2) 0 0                  0 0                  0 0 0;  
-          DRect(1,1) 0 DRect(1,2) 0 ropeLen*DRect(1,1) 0 ropeLen*DRect(1,2) 0 0 0;
-          DRect(2,1) 0 DRect(2,2) 0 ropeLen*DRect(2,1) 0 ropeLen*DRect(2,2) 0 0 0 ];
+    ax = ropeLen * (sin(thetag) - thetag*cos(thetag));
+    ay = ropeLen * (sin(phig) - phig*cos(phig));
+    bx = ropeLen * cos(thetag);
+    by = ropeLen * cos(phig);
+    D = [ DRect(1,1) 0 DRect(1,2) 0 0             0 0             0 0 0; 
+          DRect(2,1) 0 DRect(2,2) 0 0             0 0             0 0 0;  
+          DRect(1,1) 0 DRect(1,2) 0 bx*DRect(1,1) 0 by*DRect(1,2) 0 0 0;
+          DRect(2,1) 0 DRect(2,2) 0 by*DRect(2,1) 0 by*DRect(2,2) 0 0 0 ];
     ARows = [D; -D];
-    bRows = [chRect; chRect; -clRect; -clRect];
+    offset = [ - ax * DRect(1,1) - ay * DRect(1,2);
+               - ax * DRect(2,1) - ay * DRect(2,2) ];
+    bRows = [ chRect; 
+              chRect + offset ; 
+              -clRect; 
+              -clRect - offset ];
 end
 
 function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phig)
@@ -432,7 +441,7 @@ function out = ellipseEval(x, y, xc, yc, a, b)
     out = ((x - xc)/a)^2 + ((y - yc)/b)^2 - 1;
 end
 
-function [c, ceq] = nonLinearConstraints(ropeLen, ellConstr, ellipses, dt, Ts, w)
+function [c, ceq] = nonLinearConstraints(rectConstraints, ropeLen, ellConstr, ellipses, dt, Ts, w)
     % inequality constraints for ellipses
     if ellConstr == true
         N = (length(w)-8)/10;
@@ -454,6 +463,24 @@ function [c, ceq] = nonLinearConstraints(ropeLen, ellConstr, ellipses, dt, Ts, w
         end
     else
         c = [];
+    end
+    
+    % object rectangluar constraints
+    [DRect,chRect,clRect] = rectCon(rectConstraints);
+    for i=1:N-1
+        x = w(10*i+1);
+        y = w(10*i+3);
+        angle_x = w(10*i+5);
+        angle_y = w(10*i+7);
+        x_p = x + ropeLen * sin(angle_x);
+        y_p = y + ropeLen * sin(angle_y);
+        D = [ DRect(1,1) DRect(1,2); 
+              DRect(2,1) DRect(2,2)];
+        ARows = [D; -D];
+        bRows = [ chRect;  
+                  -clRect ];
+        tmpRow = ARows * [x_p; y_p] - bRows;
+        c = [c; tmpRow];
     end
     
     % equality constraints due to dynamics of system
@@ -500,7 +527,7 @@ end
 [Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, Ts, finalTrgt);
 
 % non-linear constraints
-nonlcon = @(w) nonLinearConstraints(param.craneParams.r, true, param.constraints.ellipses, param.modelDerivative, Ts, w);
+nonlcon = @(w) nonLinearConstraints(param.constraints.rect, param.craneParams.r, true, param.constraints.ellipses, param.modelDerivative, Ts, w);
 
 % options
 options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);
@@ -539,7 +566,7 @@ function [A, b] = inequalityConstraintsInitialGuess(N, ropeLen, rectConstraints,
         [A1, b1] = physicalLims;
         
         % rectangle constraints
-        [A2, b2] = rectLimsRows(rectConstraints, ropeLen);
+        [A2, b2] = rectLimsRowsInitialGuess(rectConstraints);
         
         % combine matrices
         A_tmp = [A1;A2];
@@ -566,4 +593,13 @@ function w_out = interpolate(w, factor)
     end
     w_out = reshape(w_out,[],1) ;
     w_out = w_out(1:end-2);
+end
+
+function [ARows, bRows] = rectLimsRowsInitialGuess(rectConstraints)
+    [DRect,chRect,clRect] = rectCon(rectConstraints);
+    D = [ DRect(1,1) 0 DRect(1,2) 0 0             0 0             0 0 0; 
+          DRect(2,1) 0 DRect(2,2) 0 0             0 0             0 0 0 ];
+    ARows = [D; -D];
+    bRows = [ chRect;  
+              -clRect ];
 end

@@ -11,3 +11,4 @@ function w_out = interpolate(w, factor)
     w_out = reshape(w_out,[],1) ;
     w_out = w_out(1:end-2);
 end
+
