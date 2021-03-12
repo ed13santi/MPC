@@ -1,9 +1,4 @@
 function out = objFuncInitialGuess(w, N)
-%     penalties = zeros(8+10*N,1);
-%     for i=1:N
-%        penalties(10*i-1:10*i) = ones(2,1); 
-%     end
-%     out = w' * diag(penalties) * w;
     vels = zeros(2*(N+1), 1);
     us = zeros(2*N, 1);
     for i = 1:N

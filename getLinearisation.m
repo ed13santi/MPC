@@ -14,5 +14,5 @@ end
 
 
 
-%% non-linear constraints
+%% non-linear constraints for initial guess
 

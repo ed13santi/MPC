@@ -15,17 +15,5 @@ function [A, b] = inequalityConstraintsInitialGuess(N, ropeLen, rectConstraints,
         A = [A; A_tmp2];
         b = [b; b1;b2];
     end
-    
-%     A_tmp = [ [ zeros(20, 10*(N-1)), [eye(10); -eye(10)], zeros(20, 8) ];
-%               [ zeros(16, 10*N), [eye(8); -eye(8)] ] ];
-%     b_tmp = [ r + stateTol; 
-%               inputTol;
-%               - r + stateTol;
-%               inputTol;
-%               r + stateTol; 
-%               - r + stateTol ];
-%           
-%     A = [A; A_tmp];
-%     b = [b; b_tmp];
 end
 

@@ -40,7 +40,12 @@ elseif coursenum == 2
 
     constraints.ellipses{1} = ellipse;
     
-    
+    ellipse.a  = 0.2;
+    ellipse.b  = 0.4;
+    ellipse.xc = 0.25;
+    ellipse.yc = -0.20;
+
+    constraints.ellipses{1} = ellipse;
 
     penalties = [-1, -1, -1, -1, -1];
     

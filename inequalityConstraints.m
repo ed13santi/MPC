@@ -15,7 +15,7 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
         [A2, b2] = rectLimsRows(rectConstraints, ropeLen);
         
         % ellipse constraints
-        [A3, b3] = ellipseLimsRows(ellipses, w(10*i+1), w(10*i+3));
+        [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7));
         
         
         A_tmp = [A1;A2;A3];

@@ -20,7 +20,7 @@ end
 [Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, Ts, finalTrgt);
 
 % non-linear constraints
-nonlcon = @(w) nonLinearConstraints(true, param.constraints.ellipses, param.modelDerivative, Ts, w);
+nonlcon = @(w) nonLinearConstraints(param.craneParams.r, true, param.constraints.ellipses, param.modelDerivative, Ts, w);
 
 % options
 options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);
@@ -34,5 +34,5 @@ w = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
 w = w(1:end-10);
 w = interpolate(w, factorTs);
 
-end % End of myMPController
+end 
 

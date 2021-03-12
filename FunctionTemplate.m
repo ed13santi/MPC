@@ -198,7 +198,7 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
         [A2, b2] = rectLimsRows(rectConstraints, ropeLen);
         
         % ellipse constraints
-        [A3, b3] = ellipseLimsRows(ellipses, w(10*i+1), w(10*i+3));
+        [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7));
         
         
         A_tmp = [A1;A2;A3];
@@ -268,15 +268,16 @@ function [ARows, bRows] = rectLimsRows(rectConstraints, ropeLen)
     bRows = [chRect; chRect; -clRect; -clRect];
 end
 
-function [ARows, bRows] = ellipseLimsRows(ellipses, xg, yg)
+function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phig)
     ARows = zeros(0,10);
     bRows = zeros(0,1);
     for j=1:size(ellipses,1)
         for z=1:size(ellipses,2)
             ell = ellipses{j,z};
-            [ARow, bRow] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b);
-            ARows = [ARows; ARow];
-            bRows = [bRows; bRow];
+            [ARow1, bRow1] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b);
+            [ARow2, bRow2] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, ell.xc, ell.yc, ell.a, ell.b);
+            ARows = [ARows; ARow1; ARow2];
+            bRows = [bRows; bRow1; bRow2];
         end
     end
 end
@@ -287,6 +288,18 @@ function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b)
     gamma = 2 *(yg - yc) / (b^2);
     ARow = [ -beta, 0, -gamma, 0, 0, 0, 0, 0, 0, 0 ];
     bRow = alpha - beta * xg - gamma * yg;
+end
+
+function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b)
+    alpha = ellipseEval(xg, yg, xc, yc, a, b);
+    beta = 2 * (xg - xc) / (a^2);
+    gamma = 2 *(yg - yc) / (b^2);
+    ax = ropeLen * (sin(thetag) - thetag*cos(thetag));
+    ay = ropeLen * (sin(phig) - phig*cos(phig));
+    bx = ropeLen * cos(thetag);
+    by = ropeLen * cos(phig);
+    ARow = [ -beta, 0, -gamma, 0, -beta*bx, 0, -beta*by, 0, 0, 0 ];
+    bRow = alpha - beta * xg - gamma * yg + beta * ax + gamma * ay;
 end
 
 function [ARows, bRows] = finalPositionRows(r, tolerances, i, N)
@@ -394,7 +407,7 @@ end
 
 
 
-%% non-linear constraints
+%% non-linear constraints for initial guess
 
 function x = w2x(w)
     N = (length(w)-8)/10;
@@ -419,7 +432,7 @@ function out = ellipseEval(x, y, xc, yc, a, b)
     out = ((x - xc)/a)^2 + ((y - yc)/b)^2 - 1;
 end
 
-function [c, ceq] = nonLinearConstraints(ellConstr, ellipses, dt, Ts, w)
+function [c, ceq] = nonLinearConstraints(ropeLen, ellConstr, ellipses, dt, Ts, w)
     % inequality constraints for ellipses
     if ellConstr == true
         N = (length(w)-8)/10;
@@ -427,10 +440,15 @@ function [c, ceq] = nonLinearConstraints(ellConstr, ellipses, dt, Ts, w)
         for i=1:N-1
             x = w(10*i+1);
             y = w(10*i+3);
+            angle_x = w(10*i+5);
+            angle_y = w(10*i+7);
+            x_p = x + ropeLen * sin(angle_x);
+            y_p = y + ropeLen * sin(angle_y);
             for j=1:size(ellipses,1)
                 for z=1:size(ellipses,2)
                     ell = ellipses{j,z};
                     c = [c; - ellipseEval(x, y, ell.xc, ell.yc, ell.a, ell.b)];
+                    c = [c; - ellipseEval(x_p, y_p, ell.xc, ell.yc, ell.a, ell.b)];
                 end
             end
         end
@@ -482,7 +500,7 @@ end
 [Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, Ts, finalTrgt);
 
 % non-linear constraints
-nonlcon = @(w) nonLinearConstraints(true, param.constraints.ellipses, param.modelDerivative, Ts, w);
+nonlcon = @(w) nonLinearConstraints(param.craneParams.r, true, param.constraints.ellipses, param.modelDerivative, Ts, w);
 
 % options
 options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);
@@ -496,7 +514,7 @@ w = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
 w = w(1:end-10);
 w = interpolate(w, factorTs);
 
-end % End of myMPController
+end 
 
 function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts, r)
     xus = [x0; w0(9:end-8)];
@@ -536,7 +554,7 @@ function [ARows, bRows] = finalPositionRowsInitGuess(r, N)
     bRows = r;
 end
 
-function w_out = interpolate(w, factor) %how does interp work
+function w_out = interpolate(w, factor) 
     w = [w; 0; 0];
     intStep = 1/factor;
     N = length(w)/10;

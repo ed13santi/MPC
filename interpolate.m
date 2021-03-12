@@ -1,4 +1,4 @@
-function w_out = interpolate(w, factor) %how does interp work
+function w_out = interpolate(w, factor) 
     w = [w; 0; 0];
     intStep = 1/factor;
     N = length(w)/10;
