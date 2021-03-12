@@ -47,7 +47,7 @@ end
 scatter(plotx, ploty);
 
 extraCopies = 20 / param.Ts + param.N - (length(param.w_guess) - 8)/10 + param.TsFactor;
-param.w_ref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
+param.wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
 
 end % End of mySetup
 
@@ -84,7 +84,7 @@ N = param.N;
 % inital guess w0
 persistent w0
 if isempty(w0)
-    w0 = param.w_ref(1:10*N+8);
+    w0 = param.wref(1:10*N+8);
 else
     w0(1:end-10) = w0(11:end);
     [~, ~, fref] = getLinearisation(w0(end-17:end-10), w0(end-9:end-8), 10, param.Ts, param.modelDerivative, param.genericA, param.genericB);
@@ -142,7 +142,7 @@ Aeq = sparse(Aeq);
 penalties = ones(10*N+8, 1);
 H = diag(penalties);
 
-refTraj = wref(iter*10+1:(iter+N)*10+8);
+refTraj = param.wref(iter*10+1:(iter+N)*10+8);
 f = - H * refTraj;
 w = quadprog(H,f,A,b,Aeq,beq);
 
