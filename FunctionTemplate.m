@@ -439,19 +439,13 @@ function [c, ceq] = nonLinearConstraints(ellConstr, ellipses, dt, Ts, w)
     end
     
     % equality constraints due to dynamics of system
-    ceq = w2x(w) - doStep(w, dt, Ts); % IF REACTIVATE THIS, NEED TO REMOVE
-    %LINEAR MODEL CONSTRAINTS
+    ceq = w2x(w) - doStep(w, dt, Ts); 
 end
 
 
 %% run initial optimisation
 
 function out = objFuncInitialGuess(w, N)
-%     penalties = zeros(8+10*N,1);
-%     for i=1:N
-%        penalties(10*i-1:10*i) = ones(2,1); 
-%     end
-%     out = w' * diag(penalties) * w;
     vels = zeros(2*(N+1), 1);
     us = zeros(2*N, 1);
     for i = 1:N
@@ -511,17 +505,6 @@ function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts,
     
     Aeq(1:8,1:8) = eye(8);
     beq(1:8) = x0;
-       
-    % Linear model dynamics
-%     for i=1:N
-%        x = xus(i*10-9:i*10-2);
-%        u = xus(i*10-1:i*10);
-%        [A, B, fref] = getLinearisation(x, u, 10, Ts, der, genA, genB);
-%        Aeq(8+i*8-7:8+i*8, i*10-9:i*10-2) = A; 
-%        Aeq(8+i*8-7:8+i*8, i*10-1:i*10) = B;
-%        Aeq(8+i*8-7:8+i*8, i*10+1:i*10+8) = - eye(8);
-%        beq(8+i*8-7:8+i*8) = A*x + B*u - fref;
-%     end
 
     % final position constraint
     [A_tmp, b_tmp] = finalPositionRowsInitGuess(r, N);
@@ -546,25 +529,11 @@ function [A, b] = inequalityConstraintsInitialGuess(N, ropeLen, rectConstraints,
         A = [A; A_tmp2];
         b = [b; b1;b2];
     end
-    
-%     A_tmp = [ [ zeros(20, 10*(N-1)), [eye(10); -eye(10)], zeros(20, 8) ];
-%               [ zeros(16, 10*N), [eye(8); -eye(8)] ] ];
-%     b_tmp = [ r + stateTol; 
-%               inputTol;
-%               - r + stateTol;
-%               inputTol;
-%               r + stateTol; 
-%               - r + stateTol ];
-%           
-%     A = [A; A_tmp];
-%     b = [b; b_tmp];
 end
 
 function [ARows, bRows] = finalPositionRowsInitGuess(r, N)
     ARows = [ zeros(8, 10*N), eye(8) ];
     bRows = r;
-%     ARows = [ zeros(18, 10*(N-1)), eye(18) ];
-%     bRows = [r;0;0;r];
 end
 
 function w_out = interpolate(w, factor) %how does interp work
