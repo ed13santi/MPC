@@ -2,7 +2,7 @@ function w = runInitialOptimisation(finalTrgt, x_hat, param, factorTs)
 
 % horizon length (prediction AND control)
 Ts = param.Ts * factorTs; % initial guess to uses longer Ts to reduce set-up time
-N = param.Tf / Ts - 1;
+N = param.Tf / Ts;
 
 % objective function (w contains N+1 x vectors and N u vectors)
 objFunc = @(w) objFuncInitialGuess(w, N);

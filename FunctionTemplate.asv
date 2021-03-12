@@ -112,7 +112,7 @@ inputTol = param.tolerances.input(1:2);
 ropeLen =  param.craneParams.r;
 rectConstr = param.constraints.rect;
 ellConstr = param.constraints.ellipses;
-n_at_equilibrium = max(0, iter - param.Tf / param.Ts + 1 + N);
+n_at_equilibrium = max(0, iter - param.Tf / param.Ts + param.TsFactor + N);
 [A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, w0, n_at_equilibrium);
 
 % linear equality constraints (currently only equality constraint on x0)

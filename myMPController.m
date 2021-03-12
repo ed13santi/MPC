@@ -9,14 +9,14 @@ u = zeros(2,1);
 N = param.N;
 
 % inital guess w0
-persistent w0
-if isempty(w0)
-    w0 = param.wref(1:10*N+8);
-else
-    w0(1:end-10) = w0(11:end);
-    [~, ~, fref] = getLinearisation(w0(end-17:end-10), w0(end-9:end-8), 10, param.Ts, param.modelDerivative, param.genericA, param.genericB);
-    w0(end-7:end) = fref;
-end
+% persistent w0
+% if isempty(w0)
+%     w0 = param.wref(1:10*N+8);
+% else
+%     w0(1:end-10) = w0(11:end);
+%     [~, ~, fref] = getLinearisation(w0(end-17:end-10), w0(end-9:end-8), 10, param.Ts, param.modelDerivative, param.genericA, param.genericB);
+%     w0(end-7:end) = fref;
+% end
 
 
 
@@ -27,7 +27,7 @@ else
     iter = iter + 1;
 end
 
-% w0 = param.wref(iter*10+1:(iter+N)*10+8);
+w0 = param.wref(iter*10+1:(iter+N)*10+8);
 
 
 % objective function (w contains N+1 x vectors and N u vectors)
@@ -39,7 +39,7 @@ inputTol = param.tolerances.input(1:2);
 ropeLen =  param.craneParams.r;
 rectConstr = param.constraints.rect;
 ellConstr = param.constraints.ellipses;
-n_at_equilibrium = max(0, iter - param.Tf / param.Ts + param.TsFactor + N);
+n_at_equilibrium = max(0, iter - param.Tf / param.Ts + 1 + N);
 [A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, w0, n_at_equilibrium);
 
 % linear equality constraints (currently only equality constraint on x0)
