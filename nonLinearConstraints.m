@@ -22,7 +22,7 @@ function [c, ceq] = nonLinearConstraints(rectConstraints, ropeLen, ellConstr, el
         c = [];
     end
     
-    % object rectangluar constraints
+    % object rectangular constraints
     [DRect,chRect,clRect] = rectCon(rectConstraints);
     for i=1:N-1
         x = w(10*i+1);
@@ -34,8 +34,7 @@ function [c, ceq] = nonLinearConstraints(rectConstraints, ropeLen, ellConstr, el
         D = [ DRect(1,1) DRect(1,2); 
               DRect(2,1) DRect(2,2)];
         ARows = [D; -D];
-        bRows = [ chRect;  
-                  -clRect ];
+        bRows = [ chRect; -clRect ];
         tmpRow = ARows * [x_p; y_p] - bRows;
         c = [c; tmpRow];
     end

@@ -40,11 +40,18 @@ param.w_guess = runInitialOptimisation(targetState, initialState, param, param.T
 figure;
 plotx = [];
 ploty = [];
+plotxp = [];
+plotyp = [];
 for i=1:(length(param.w_guess)-8)/10+1
    plotx = [plotx param.w_guess(i*10-9)]; 
    ploty = [ploty param.w_guess(i*10-7)]; 
+   plotxp = [plotxp param.w_guess(i*10-9)+param.craneParams.r*sin(param.w_guess(i*10-5))]; 
+   plotyp = [plotyp param.w_guess(i*10-7)+param.craneParams.r*sin(param.w_guess(i*10-3))];
 end
 scatter(plotx, ploty);
+hold on;
+scatter(plotxp, plotyp);
+hold off;
 
 extraCopies = 20 / param.Ts + param.N - (length(param.w_guess) - 8)/10 + param.TsFactor;
 param.wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
@@ -265,7 +272,7 @@ function [ARows, bRows] = rectLimsRows(rectConstraints, ropeLen, thetag, phig)
     bx = ropeLen * cos(thetag);
     by = ropeLen * cos(phig);
     D = [ DRect(1,1) 0 DRect(1,2) 0 0             0 0             0 0 0; 
-          DRect(2,1) 0 DRect(2,2) 0 0             0 0             0 0 0;  
+          DRect(2,1) 0 DRect(2,2) 0 0             0 0             0 0 0; 
           DRect(1,1) 0 DRect(1,2) 0 bx*DRect(1,1) 0 by*DRect(1,2) 0 0 0;
           DRect(2,1) 0 DRect(2,2) 0 by*DRect(2,1) 0 by*DRect(2,2) 0 0 0 ];
     ARows = [D; -D];
@@ -273,7 +280,7 @@ function [ARows, bRows] = rectLimsRows(rectConstraints, ropeLen, thetag, phig)
                - ax * DRect(2,1) - ay * DRect(2,2) ];
     bRows = [ chRect; 
               chRect + offset ; 
-              -clRect; 
+              -clRect;
               -clRect - offset ];
 end
 
@@ -300,15 +307,17 @@ function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b)
 end
 
 function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b)
-    alpha = ellipseEval(xg, yg, xc, yc, a, b);
-    beta = 2 * (xg - xc) / (a^2);
-    gamma = 2 *(yg - yc) / (b^2);
+    xg_p = xg + ropeLen * sin(thetag); 
+    yg_p = yg + ropeLen * sin(phig); 
+    alpha = ellipseEval(xg_p, yg_p, xc, yc, a, b);
+    beta =  2 * (xg_p - xc) / (a^2);
+    gamma = 2 * (yg_p - yc) / (b^2);
     ax = ropeLen * (sin(thetag) - thetag*cos(thetag));
     ay = ropeLen * (sin(phig) - phig*cos(phig));
     bx = ropeLen * cos(thetag);
     by = ropeLen * cos(phig);
-    ARow = [ -beta, 0, -gamma, 0, -beta*bx, 0, -beta*by, 0, 0, 0 ];
-    bRow = alpha - beta * xg - gamma * yg + beta * ax + gamma * ay;
+    ARow = [ -beta, 0, -gamma, 0, -beta*bx, 0, -gamma*by, 0, 0, 0 ];
+    bRow = alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay;
 end
 
 function [ARows, bRows] = finalPositionRows(r, tolerances, i, N)
@@ -465,7 +474,7 @@ function [c, ceq] = nonLinearConstraints(rectConstraints, ropeLen, ellConstr, el
         c = [];
     end
     
-    % object rectangluar constraints
+    % object rectangular constraints
     [DRect,chRect,clRect] = rectCon(rectConstraints);
     for i=1:N-1
         x = w(10*i+1);
@@ -477,8 +486,7 @@ function [c, ceq] = nonLinearConstraints(rectConstraints, ropeLen, ellConstr, el
         D = [ DRect(1,1) DRect(1,2); 
               DRect(2,1) DRect(2,2)];
         ARows = [D; -D];
-        bRows = [ chRect;  
-                  -clRect ];
+        bRows = [ chRect; -clRect ];
         tmpRow = ARows * [x_p; y_p] - bRows;
         c = [c; tmpRow];
     end

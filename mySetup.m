@@ -40,11 +40,18 @@ param.w_guess = runInitialOptimisation(targetState, initialState, param, param.T
 figure;
 plotx = [];
 ploty = [];
+plotxp = [];
+plotyp = [];
 for i=1:(length(param.w_guess)-8)/10+1
    plotx = [plotx param.w_guess(i*10-9)]; 
    ploty = [ploty param.w_guess(i*10-7)]; 
+   plotxp = [plotxp param.w_guess(i*10-9)+param.craneParams.r*sin(param.w_guess(i*10-5))]; 
+   plotyp = [plotyp param.w_guess(i*10-7)+param.craneParams.r*sin(param.w_guess(i*10-3))];
 end
 scatter(plotx, ploty);
+hold on;
+scatter(plotxp, plotyp);
+hold off;
 
 extraCopies = 20 / param.Ts + param.N - (length(param.w_guess) - 8)/10 + param.TsFactor;
 param.wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
