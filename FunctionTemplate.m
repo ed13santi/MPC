@@ -8,11 +8,12 @@ param.eps_r = shape.eps_r;
 param.eps_t = shape.eps_t;      
 param.start = shape.start;      
 param.target = shape.target;     
-param.Wmax = shape.Wmax;       
-param.Tf = shape.Tf;    
+param.Wmax = shape.Wmax;   
 
-% This is how to set the sampling interval
-param.Ts = 0.05;
+param.Ts = 0.05; % set sampling period
+param.TsFactor = 5; % set sampling frequency reduction factor for initial non-linear optimisation
+param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
+
 
 % This is a sample way to send reference points
 param.xTar = shape.target(1);
@@ -34,7 +35,6 @@ param.craneParams = load('Crane_NominalParameters.mat');
 
 %Run initial optimisation over whole length of episode using fully
 %non-linear model
-param.TsFactor = 5;
 param.w_guess = runInitialOptimisation(targetState, initialState, param, param.TsFactor);
 
 figure;

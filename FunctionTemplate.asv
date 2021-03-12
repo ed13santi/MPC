@@ -9,7 +9,7 @@ param.eps_t = shape.eps_t;
 param.start = shape.start;      
 param.target = shape.target;     
 param.Wmax = shape.Wmax;       
-param.Tf = shape.Tf;    
+param.Tf = shape.Tf - param.Ts * TsFactor;    
 
 % This is how to set the sampling interval
 param.Ts = 0.05;
@@ -34,7 +34,7 @@ param.craneParams = load('Crane_NominalParameters.mat');
 
 %Run initial optimisation over whole length of episode using fully
 %non-linear model
-param.TsFactor = 5;
+
 param.w_guess = runInitialOptimisation(targetState, initialState, param, param.TsFactor);
 
 figure;
@@ -112,7 +112,7 @@ inputTol = param.tolerances.input(1:2);
 ropeLen =  param.craneParams.r;
 rectConstr = param.constraints.rect;
 ellConstr = param.constraints.ellipses;
-n_at_equilibrium = max(0, iter - param.Tf / param.Ts + param.TsFactor + N);
+n_at_equilibrium = max(0, iter - param.Tf / param.Ts + 1 + N);
 [A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, w0, n_at_equilibrium);
 
 % linear equality constraints (currently only equality constraint on x0)
