@@ -42,9 +42,23 @@ elseif coursenum == 2
 
     constraints.ellipses{2} = ellipse;
     
+    ellipse.a  = 0.03;
+    ellipse.b  = 0.03;
+    ellipse.xc = 0.43;
+    ellipse.yc = 0.1;
+
+    constraints.ellipses{3} = ellipse;
+    
+    ellipse.a  = 0.03;
+    ellipse.b  = 0.03;
+    ellipse.xc = 0.25;
+    ellipse.yc = 0.25;
+
+    constraints.ellipses{4} = ellipse;
+    
     
 
-    penalties = [-1, -1, -1, -1, -1, -1];
+    penalties = [-1, -1, -1, -1, -1, -1, -1, -1];
     
     start  = [0.05, 0.05];
     target = [0.45, 0.05];

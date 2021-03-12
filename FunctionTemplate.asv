@@ -146,12 +146,24 @@ Aeq = sparse(Aeq);
 % penBlock = [ones(10,1); zeros(10*(param.TsFactor-1),1)];
 % n_blocks = N/param.TsFactor;
 % penalties = [kron(ones(n_blocks,1), penBlock); ones(8,1)];
-penalties = ones(10*N+8, 1);
+xPen = 1;
+uPen = 0.001;
+penaltyBlk = [xPen * ones(8,1); uPen * ones(2,1)]; 
+penalties = [ kron(ones(N,1), penaltyBlk); 10 * ones(8,1) ];
 H = diag(penalties);
 
-refTraj = param.wref(iter*10+1:(iter+N)*10+8);
+persistent prevW
+if isempty(prevW)
+    refTraj = [x_hat(1:8); param.wref((iter+1)*10+9:(iter+N+1)*10+8)];
+else
+    refTraj = [x_hat(1:8); prevW(19:end); param.wref((iter+N)*10+1:(iter+N)*10+8)];
+end
+
+%refTraj = param.wref(iter*10+1:(iter+N)*10+8);
 f = - H * refTraj;
 w = quadprog(H,f,A,b,Aeq,beq);
+
+prevW = w;
 
 % extract u from w
 u = w(9:10);
@@ -310,14 +322,14 @@ function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc
     xg_p = xg + ropeLen * sin(thetag); 
     yg_p = yg + ropeLen * sin(phig); 
     alpha = ellipseEval(xg_p, yg_p, xc, yc, a, b);
-    beta =  2 * (xg - xc) / (a^2);
-    gamma = 2 * (yg - yc) / (b^2);
+    beta =  2 * (xg_p - xc) / (a^2);
+    gamma = 2 * (yg_p - yc) / (b^2);
     ax = ropeLen * (sin(thetag) - thetag*cos(thetag));
     ay = ropeLen * (sin(phig) - phig*cos(phig));
     bx = ropeLen * cos(thetag);
     by = ropeLen * cos(phig);
     ARow = [ -beta, 0, -gamma, 0, -beta*bx, 0, -gamma*by, 0, 0, 0 ];
-    bRow = alpha - beta * xg - gamma * yg + beta * ax + gamma * ay;
+    bRow = alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay;
 end
 
 function [ARows, bRows] = finalPositionRows(r, tolerances, i, N)
@@ -492,7 +504,8 @@ function [c, ceq] = nonLinearConstraints(rectConstraints, ropeLen, ellConstr, el
     end
     
     % equality constraints due to dynamics of system
-    ceq = w2x(w) - doStep(w, dt, Ts); 
+%     ceq = w2x(w) - doStep(w, dt, Ts); 
+    ceq = [];
 end
 
 
@@ -519,34 +532,37 @@ function w = runInitialOptimisation(finalTrgt, x_hat, param, factorTs)
 Ts = param.Ts * factorTs; % initial guess to uses longer Ts to reduce set-up time
 N = param.Tf / Ts;
 
-% objective function (w contains N+1 x vectors and N u vectors)
-objFunc = @(w) objFuncInitialGuess(w, N);
-
 % initial guess w0
 w0 = [x_hat; zeros(10*N, 1)];
 for i=1:N
     w0(10*i+1:10*i+8) = (finalTrgt - x_hat) / N * i + x_hat;
 end
 
-% linear inequality constraint
-[A, b] = inequalityConstraintsInitialGuess(N, param.craneParams.r, param.constraints.rect, finalTrgt, param.tolerances.state(1:8), param.tolerances.input(1:2));
+% objective function (w contains N+1 x vectors and N u vectors)
+objFunc = @(w) objFuncInitialGuess(w, N);
 
-% linear equality constraints (currently only equality constraint on x0)
-[Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, Ts, finalTrgt);
+for relinearisation=1:3 % rerun multiple times using better linearisation
 
-% non-linear constraints
-nonlcon = @(w) nonLinearConstraints(param.constraints.rect, param.craneParams.r, true, param.constraints.ellipses, param.modelDerivative, Ts, w);
+    % linear inequality constraint
+    [A, b] = inequalityConstraintsInitialGuess(N, param.craneParams.r, param.constraints.rect, finalTrgt, param.tolerances.state(1:8), param.tolerances.input(1:2));
 
-% options
-options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);
+    % linear equality constraints (currently only equality constraint on x0)
+    [Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, Ts, finalTrgt);
 
-% optimisation
-A = sparse(A);
-Aeq = sparse(Aeq);
-w = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
+    % non-linear constraints
+    nonlcon = @(w) nonLinearConstraints(param.constraints.rect, param.craneParams.r, true, param.constraints.ellipses, param.modelDerivative, Ts, w);
+
+    % options
+    options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);
+
+    % optimisation
+    A = sparse(A);
+    Aeq = sparse(Aeq);
+    w0 = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
+end
 
 % interpolate 
-w = w(1:end-10);
+w = w0(1:end-10);
 w = interpolate(w, factorTs);
 
 end 
@@ -558,11 +574,27 @@ function [Aeq, beq] = linearEqConstrInitialGuess(x0, w0, genA, genB, der, N, Ts,
     
     Aeq(1:8,1:8) = eye(8);
     beq(1:8) = x0;
+    
+    % linear model constraints
+    xus = [x0; w0(9:end-8)];
+       
+    for i=1:N
+       x = xus(i*10-9:i*10-2);
+       u = xus(i*10-1:i*10);
+       [A, B, fref] = getLinearisation(x, u, 10, Ts, der, genA, genB);
+       Aeq(8+i*8-7:8+i*8, i*10-9:i*10-2) = A; 
+       Aeq(8+i*8-7:8+i*8, i*10-1:i*10) = B;
+       Aeq(8+i*8-7:8+i*8, i*10+1:i*10+8) = - eye(8);
+       beq(8+i*8-7:8+i*8) = A*x + B*u - fref;
+    end
 
     % final position constraint
     [A_tmp, b_tmp] = finalPositionRowsInitGuess(r, N);
     Aeq = [Aeq; A_tmp];
     beq = [beq; b_tmp];
+    
+    
+    
 end
 
 function [A, b] = inequalityConstraintsInitialGuess(N, ropeLen, rectConstraints, r, stateTol, inputTol)

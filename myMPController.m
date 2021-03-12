@@ -66,12 +66,24 @@ Aeq = sparse(Aeq);
 % penBlock = [ones(10,1); zeros(10*(param.TsFactor-1),1)];
 % n_blocks = N/param.TsFactor;
 % penalties = [kron(ones(n_blocks,1), penBlock); ones(8,1)];
-penalties = ones(10*N+8, 1);
+xPen = 1;
+uPen = 0.001;
+penaltyBlk = [xPen * ones(8,1); uPen * ones(2,1)]; 
+penalties = [ kron(ones(N,1), penaltyBlk); 10 * ones(8,1) ];
 H = diag(penalties);
 
-refTraj = param.wref(iter*10+1:(iter+N)*10+8);
+persistent prevW
+if isempty(prevW)
+    refTraj = [x_hat(1:8); param.wref((iter+1)*10+9:(iter+N+1)*10+8)];
+else
+    refTraj = [x_hat(1:8); prevW(19:end); param.wref((iter+N+1)*10-1:(iter+N+1)*10+8)];
+end
+
+%refTraj = param.wref(iter*10+1:(iter+N)*10+8);
 f = - H * refTraj;
 w = quadprog(H,f,A,b,Aeq,beq);
+
+prevW = w;
 
 % extract u from w
 u = w(9:10);

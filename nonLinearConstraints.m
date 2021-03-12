@@ -40,7 +40,8 @@ function [c, ceq] = nonLinearConstraints(rectConstraints, ropeLen, ellConstr, el
     end
     
     % equality constraints due to dynamics of system
-    ceq = w2x(w) - doStep(w, dt, Ts); 
+%     ceq = w2x(w) - doStep(w, dt, Ts); 
+    ceq = [];
 end
 
 
