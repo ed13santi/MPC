@@ -65,6 +65,38 @@ elseif coursenum == 2
     
     Wmax = 1;
     Tf   = 5;
+    
+elseif coursenum==3
+    constraints.rect=[-0.75,-0.75;0.75,-0.75;0.75,0.75;-0.75,0.75]
+
+    ellipse0.xc=0.0;
+    ellipse0.yc=0.0;
+    ellipse0.a=0.25;
+    ellipse0.b=0.25;
+
+    ellipse1.xc=0.2;
+    ellipse1.yc=0.2;
+    ellipse1.a=0.05;
+    ellipse1.b=0.75;
+
+    ellipse2.xc=-0.2;
+    ellipse2.yc=-0.7;
+    ellipse2.a=0.05;
+    ellipse2.b=0.35;
+
+    ellipse3.xc=0.0;
+    ellipse3.yc=0.0;
+    ellipse3.a=0.6;
+    ellipse3.b=0.05;
+    constraints.ellipses={ellipse0,ellipse1,ellipse2,ellipse3};
+    penalties = [-1, -1, -1, -1, -1, -1, -1, -1];
+    start=[0, 0.6];
+    target=[0.5, 0.5];
+    
+    
+    
+    Wmax = 1;
+    Tf   = 15;
 end
 
 shape.constraints = constraints;

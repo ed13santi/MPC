@@ -6,3 +6,7 @@ function [ARows, bRows] = rectLimsRowsInitialGuess(rectConstraints)
     bRows = [ chRect;  
               -clRect ];
 end
+
+
+%% find path
+

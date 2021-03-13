@@ -53,7 +53,8 @@ hold on;
 scatter(plotxp, plotyp);
 hold off;
 
-extraCopies = 20 / param.Ts + param.N - (length(param.w_guess) - 8)/10 + param.TsFactor;
+simulationLength = 20;
+extraCopies = simulationLength / param.Ts + param.N - (length(param.w_guess) - 8)/10 + param.TsFactor;
 param.wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
 
 end % End of mySetup
@@ -554,16 +555,55 @@ function w = runInitialOptimisation(finalTrgt, x_hat, param, factorTs)
 Ts = param.Ts * factorTs; % initial guess to uses longer Ts to reduce set-up time
 N = param.Tf / Ts;
 
+% find approximate path (no inputs)
+% xs = findPath(finalTrgt, x_hat, N, param);
+A = param.constraints.rect(1,:);
+B = param.constraints.rect(2,:);
+C = param.constraints.rect(3,:);
+D = param.constraints.rect(4,:);
+[~,xs] = makePath(A',B',C',D',0.005,[x_hat(1); x_hat(3)],[finalTrgt(1); finalTrgt(3)],param.constraints.rect,param.constraints.ellipses);
+xs = changeToCorrectLength(xs, N);
+pathPlanningDone = "PATH PLANNING COMPLETED"
+figure;
+% scatter(xs(1:2:end),xs(2:2:end));
+scatter(xs(1,:),xs(2,:));
+
 % initial guess w0
-w0 = [x_hat; zeros(10*N, 1)];
-for i=1:N
-    w0(10*i+1:10*i+8) = (finalTrgt - x_hat) / N * i + x_hat;
-end
+w0 = plannedPath2wrefInitial(xs);
+
+% objective function (w contains N+1 x vectors and N u vectors)
+objFunc = @(w) objFuncPath(w, w0, N);
+
+% linear inequality constraint
+[A, b] = inequalityConstraintsInitialGuess(N, param.craneParams.r, param.constraints.rect, finalTrgt, param.tolerances.state(1:8), param.tolerances.input(1:2));
+
+% linear equality constraints (currently only equality constraint on x0)
+[Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, Ts, finalTrgt);
+
+% non-linear constraints
+nonlcon = @(w) nonLinearConstraints(param.constraints.rect, param.craneParams.r, true, param.constraints.ellipses, param.modelDerivative, Ts, w);
+
+% options
+options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);
+
+% optimisation
+A = sparse(A);
+Aeq = sparse(Aeq);
+w0 = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
+    
+    
+% w0 = [x_hat; zeros(10*N, 1)];
+% for i=1:N
+%     w0(10*i+1:10*i+8) = (finalTrgt - x_hat) / N * i + x_hat;
+% end
+
+    
+    
 
 % objective function (w contains N+1 x vectors and N u vectors)
 objFunc = @(w) objFuncInitialGuess(w, N);
 
-for relinearisation=1:3 % rerun multiple times using better linearisation
+for relinearisation=1:1 % rerun multiple times using better linearisation
 
     % linear inequality constraint
     [A, b] = inequalityConstraintsInitialGuess(N, param.craneParams.r, param.constraints.rect, finalTrgt, param.tolerances.state(1:8), param.tolerances.input(1:2));
@@ -664,4 +704,274 @@ function [ARows, bRows] = rectLimsRowsInitialGuess(rectConstraints)
     ARows = [D; -D];
     bRows = [ chRect;  
               -clRect ];
+end
+
+
+%% find path
+
+function xs = findPath(finalTrgt, x_hat, N, param)
+    finalTrgt = [finalTrgt(1); finalTrgt(3)];
+    x_hat = [x_hat(1); x_hat(3)];
+    % initial guess x0
+    x0 = x_hat;
+    for i=1:N
+        x0(2*i+1:2*i+2) = (finalTrgt - x_hat) / N * i + x_hat;
+    end
+    
+    % objective function minimises distance between consecutive xs
+    objFunc = @(x) pathObjFunc(x, N);
+    
+    % linear inequality constraint
+    [A, b] = inequalityConstraintsPath(N, param.constraints.rect);
+
+    % linear equality constraints 
+    [Aeq, beq] = linearEqConstrPath(x_hat, finalTrgt, N);
+
+    % non-linear constraints
+    nonlcon = @(x) nonLinearConstraintsPath(true, param.constraints.ellipses, x, N);
+
+    % options
+    options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);
+% 
+%     size(x0)
+%     size(A)
+%     size(b)
+%     size(Aeq)
+%     size(beq)
+    
+    % optimisation
+    A = sparse(A);
+    Aeq = sparse(Aeq);
+    xs = fmincon(objFunc,x0,A,b,Aeq,beq,[],[],nonlcon,options);
+end
+
+function f = pathObjFunc(x, N)
+    T = [ [ zeros(2*N,2), eye(2*N) ];
+          [ zeros(2,2*N), eye(2) ] ];
+    p = eye(2*(N+1));
+    H = p - T'*p' - p*T + T'*p*T;
+    f = x' * H * x;
+end
+
+function [A, b] = inequalityConstraintsPath(N, rectConstraints)
+    A = zeros(0, 2+2*N);
+    b = zeros(0, 1);
+    
+    for i=1:N-1        
+        % rectangle constraints
+        [A2, b2] = rectLimRowsPath(rectConstraints);
+        
+        % combine matrices
+        A_tmp = [zeros(size(A2,1), i*2), A2, zeros(size(A2,1), 2*N-i*2)];
+        A = [A; A_tmp];
+        b = [b; b2];
+    end
+end
+
+function [ARows, bRows] = rectLimRowsPath(rectConstraints)
+    [DRect,chRect,clRect] = rectCon(rectConstraints);
+    D = [ DRect(1,1) DRect(1,2); 
+          DRect(2,1) DRect(2,2) ];
+    ARows = [D; -D];
+    bRows = [ chRect;  
+              -clRect ];
+end
+
+function [Aeq, beq] = linearEqConstrPath(x_first, x_trgt, N)
+    Aeq = [ [eye(2), zeros(2, 2*N)];
+            [zeros(2, 2*N), eye(2)] ];
+    beq = [x_first; x_trgt];
+end
+
+function [c, ceq] = nonLinearConstraintsPath(ellConstr, ellipses, x_in, N)
+    % inequality constraints for ellipses
+    if ellConstr == true
+        c = [];
+        for i=1:N-1
+            x = x_in(2*i+1);
+            y = x_in(2*i+2);
+            for j=1:size(ellipses,1)
+                for z=1:size(ellipses,2)
+                    ell = ellipses{j,z};
+                    c = [c; - ellipseEval(x, y, ell.xc, ell.yc, ell.a, ell.b)];
+                end
+            end
+        end
+    else
+        c = [];
+    end
+    
+    ceq = [];
+end
+
+%% Find path 2
+
+function [success,path] = makePath(A,B,C,D,h,start,target,rectConstr,ellConstr) %MAKE SURE START AND TARGET ARE 2 ELEMENT VECTORS
+    coords = [A,B,C,D];
+    minx = min(coords(1,:));
+    miny = min(coords(2,:));
+    maxx = max(coords(1,:));
+    maxy = max(coords(2,:));
+    
+    nx = ceil((maxx-minx)/h);
+    ny = ceil((maxy-miny)/h);
+    
+    outRect = zeros(nx, ny);
+    corner = [minx; miny];
+    
+    start_ind = [floor((start(1)-minx)/h)+1; floor((start(2)-miny)/h)+1];
+    trgt_ind = [floor((target(1)-minx)/h)+1; floor((target(2)-miny)/h)+1];
+    
+    for i=1:size(outRect,1)
+        for j=1:size(outRect,2)
+            x = minx + (i-1) * h + h/2;
+            y = miny + (j-1) * h + h/2;
+            violate1 = violateRectConstr(rectConstr, x, y);
+            violate2 = violateEllConstr(ellConstr, x, y);
+            if violate1 | violate2
+                outRect(i,j) = -1;
+            end
+        end
+    end
+    
+    outRect(start_ind(1),start_ind(2)) = 1;
+    
+    success = true;
+    found = false;
+    maxIter = 50000;
+    iter = 0;
+    while not(found) & iter < maxIter
+        [outRect, found] = runIterationPathFinding(outRect, trgt_ind);
+        iter = iter + 1;
+    end
+    
+    if not(found)
+       error = "Path Finding failed, MaxIter reached" 
+       success = false;
+    end
+    
+    path = rect2path(outRect, trgt_ind, minx, miny, h);
+end
+
+function path = rect2path(rect, trgtInd, minx, miny, h)
+    padded  = [zeros(size(rect,1),1), rect, zeros(size(rect,1),1)];
+    padded  = [zeros(1,size(padded,2)); padded; zeros(1,size(padded,2))];
+
+    current = trgtInd + [1;1];
+    path = [trgtInd];
+    finished = false;
+    while not(finished)
+        currVal = padded(current(1),current(2));
+        next = [-1;-1];
+        if padded(current(1)+1,current(2)-1) == currVal - 1
+            next = current + [1;-1];
+        end
+        if padded(current(1)+1,current(2)) == currVal - 1
+            next = current + [1;0];
+        end
+        if padded(current(1)+1,current(2)+1) == currVal - 1
+            next = current + [1;1];
+        end
+        if padded(current(1)-1,current(2)-1) == currVal - 1
+            next = current + [-1;-1];
+        end
+        if padded(current(1)-1,current(2)) == currVal - 1
+            next = current + [-1;0];
+        end
+        if padded(current(1)-1,current(2)+1) == currVal - 1
+            next = current + [-1;1];
+        end
+        if padded(current(1),current(2)-1) == currVal - 1
+            next = current + [0;-1];
+        end
+        if padded(current(1),current(2)+1) == currVal - 1
+            next = current + [0;1];
+        end
+        
+        path = [path, next - [1;1]];
+        if currVal == 2
+            finished = true;
+        end
+        current = next;
+    end
+    
+    for i=1:size(path,2)
+        path(1,i) =  minx + (path(1,i)-1) * h;
+        path(2,i) =  miny + (path(2,i)-1) * h;
+    end
+    
+    path = flip(path,2);
+end
+
+function p = changeToCorrectLength(path, N)
+    N_path = size(path,2) - 1;
+    intStep = N_path / N;
+    p(1,:) = interp1(1:N_path+1, path(1,:), 1:intStep:N_path+1,'linear');
+    p(2,:) = interp1(1:N_path+1, path(2,:), 1:intStep:N_path+1,'linear');
+end
+
+function [outRect, found] = runIterationPathFinding(outRect, trgt_ind)
+    padded  = [zeros(size(outRect,1),1), outRect, zeros(size(outRect,1),1)];
+    padded  = [zeros(1,size(padded,2)); padded; zeros(1,size(padded,2))];
+    for i=2:size(outRect,1)+1
+        for j=2:size(outRect,2)+1
+            if padded(i,j) == 0
+                neigh = 0;
+                neigh = max(padded(i  ,j-1),neigh);
+                neigh = max(padded(i  ,j+1),neigh);
+                neigh = max(padded(i-1,j-1),neigh);
+                neigh = max(padded(i-1,j+1),neigh);
+                neigh = max(padded(i-1,j  ),neigh);
+                neigh = max(padded(i+1,j-1),neigh);
+                neigh = max(padded(i+1,j+1),neigh);
+                neigh = max(padded(i+1,j  ),neigh);
+                if neigh > 0
+                    outRect(i-1,j-1) = neigh + 1;
+                end
+            end
+        end
+    end
+    found = (outRect(trgt_ind(1),trgt_ind(2)) > 0);
+end
+
+function violate = violateRectConstr(rectConstr, x, y)
+    [DRect,chRect,clRect] = rectCon(rectConstr);
+    D = [ DRect(1,1) DRect(1,2); 
+          DRect(2,1) DRect(2,2) ];
+    ARows = [D; -D];
+    bRows = [ chRect;  
+              -clRect ];
+    vect = ARows * [x;y] - bRows;
+    violate = any(vect > 0);
+end
+
+function violate = violateEllConstr(ellipses, x, y)
+    violate = false;
+    for j=1:size(ellipses,1)
+        for z=1:size(ellipses,2)
+            ell = ellipses{j,z};
+            if ellipseEval(x, y, ell.xc, ell.yc, ell.a, ell.b) <= 0
+                violate = true;
+            end
+        end
+    end
+end
+
+function wrefInitial = plannedPath2wrefInitial(path)
+    wrefInitial = []
+    for i=1:size(path,2)-1
+        wrefInitial = [wrefInitial; path(1,i); 0; path(2,i); 0; 0; 0; 0; 0; 0; 0];
+    end
+    wrefInitial = [wrefInitial; path(1,end); 0; path(2,end); 0; 0; 0; 0; 0];
+end
+
+function out = objFuncPath(w, w0, N)
+    w_r = [];
+    w0_r = [];
+    for i=1:N+1
+        w_r = [w_r; w(10*i-9); w(10*i-7)];
+        w0_r = [w0_r; w0(10*i-9); w0(10*i-7)];
+    end
+    diff = w_r - w0_r;
+    out = diff' * diff;
 end

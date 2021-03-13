@@ -53,7 +53,8 @@ hold on;
 scatter(plotxp, plotyp);
 hold off;
 
-extraCopies = 20 / param.Ts + param.N - (length(param.w_guess) - 8)/10 + param.TsFactor;
+simulationLength = 20;
+extraCopies = simulationLength / param.Ts + param.N - (length(param.w_guess) - 8)/10 + param.TsFactor;
 param.wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
 
 end % End of mySetup
