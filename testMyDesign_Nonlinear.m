@@ -18,7 +18,7 @@ clear variables
 perturbSize = 0.1;
 
 % The part of the core coursework that is being worked on
-partNum = 1;
+partNum = 3;
 
 % Introduce a second ellipse to the course for part 2
 useSecondEllipse = 1;
@@ -32,17 +32,17 @@ load('Crane_NominalParameters.mat');
 testCourse = defaultCourse( 0, partNum );
 
 % Only for part 2 - add a second ellipse
-if( partNum == 2 && useSecondEllipse == 1 )
-    % Define the new ellipse
-    ellipse.a  = 0.3;
-    ellipse.b  = 0.17;
-    ellipse.xc = 0.25;
-    ellipse.yc = 0.35;
-    testCourse.shape.constraints.ellipses{2} = ellipse;
-    
-    % Add another index to the penalties array for the new ellipse
-    testCourse.penalties = [ testCourse.penalties, -1];
-end
+% if( partNum == 2 && useSecondEllipse == 1 )
+%     % Define the new ellipse
+%     ellipse.a  = 0.3;
+%     ellipse.b  = 0.17;
+%     ellipse.xc = 0.25;
+%     ellipse.yc = 0.35;
+%     testCourse.shape.constraints.ellipses{2} = ellipse;
+%     
+%     % Add another index to the penalties array for the new ellipse
+%     testCourse.penalties = [ testCourse.penalties, -1];
+% end
 
 
 %% Perturb the parameters
@@ -87,7 +87,7 @@ Fs_default = 20; % sampling frequency
 Ts_default = 1/Fs_default; % sampling period
 
 x0 = [ testCourse.shape.start(1,1);  % x of cart
-       0                             % x dot of cart
+       0;                            % x dot of cart
        testCourse.shape.start(1,2);  % y of cart
        0;                            % y dot of cart
        0;                            % theta of pendulum

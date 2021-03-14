@@ -40,7 +40,8 @@ ropeLen =  param.craneParams.r;
 rectConstr = param.constraints.rect;
 ellConstr = param.constraints.ellipses;
 n_at_equilibrium = max(0, iter - param.Tf / param.Ts + 1 + N);
-[A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, w0, n_at_equilibrium);
+extraDist = param.extraDistanceEllipses;
+[A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, w0, n_at_equilibrium, extraDist);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);

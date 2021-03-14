@@ -14,7 +14,6 @@ param.Ts = 0.1; % set sampling period
 param.TsFactor = 5; % set sampling frequency reduction factor for initial non-linear optimisation
 param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
 
-param.extraDistanceEllipses = 0.1;
 
 % This is a sample way to send reference points
 param.xTar = shape.target(1);
@@ -122,8 +121,7 @@ ropeLen =  param.craneParams.r;
 rectConstr = param.constraints.rect;
 ellConstr = param.constraints.ellipses;
 n_at_equilibrium = max(0, iter - param.Tf / param.Ts + 1 + N);
-extraDist = param.extraDistanceEllipses;
-[A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, w0, n_at_equilibrium, extraDist);
+[A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, w0, n_at_equilibrium);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
@@ -203,7 +201,7 @@ end
 
 
 %% linear inequality constraints
-function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectConstraints, ellipses, w, n_final, extraDistanceEllipses)
+function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectConstraints, ellipses, w, n_final)
     if n_final < N + 1
         A = zeros(0, 8+10*N);
         b = zeros(0, 1);
@@ -220,11 +218,11 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
         [A2, b2] = rectLimsRows(rectConstraints, ropeLen, w(10*i+5), w(10*i+7));
         
         % ellipse constraints
-        [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7), extraDistanceEllipses);
+        [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7));
         
         
         A_tmp = [A1;A2;A3];
-        A_tmp2 = [zeros(size(A_tmp,1), i*10-2), A_tmp, zeros(size(A_tmp,1), 10*N-i*10)];
+        A_tmp2 = [zeros(size(A_tmp,1), i*10-2), A_tmp, zeros(size(A_tmp,1), 10+10*N-i*10)];
         A = [A; A_tmp2];
         b = [b; b1;b2;b3];
         
@@ -299,7 +297,7 @@ function [ARows, bRows] = rectLimsRows(rectConstraints, ropeLen, thetag, phig)
               -clRect - offset ];
 end
 
-function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phig, extraDistance)
+function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phig)
     ellList = [];
     ellVals = [];
     ellObjVals = [];
@@ -323,7 +321,7 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
     n_constr = min(2, length(indexesCart));
     for ellInd=1:indexesCart(1:n_constr)
         ell = ellList(ellInd);
-        [ARow1, bRow1] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b, extraDistance);
+        [ARow1, bRow1] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b);
         ARows = [ARows; ARow1];
         bRows = [bRows; bRow1];
     end 
@@ -331,21 +329,21 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
     n_constr = min(2, length(indexesObj));
     for ellInd=1:indexesObj(1:n_constr)
         ell = ellList(ellInd);
-        [ARow2, bRow2] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, ell.xc, ell.yc, ell.a, ell.b, extraDistance);
+        [ARow2, bRow2] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, ell.xc, ell.yc, ell.a, ell.b);
         ARows = [ARows; ARow2];
         bRows = [bRows; bRow2];
     end 
 end
 
-function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDistance)
+function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b)
     alpha = ellipseEval(xg, yg, xc, yc, a, b);
     beta = 2 * (xg - xc) / (a^2);
     gamma = 2 *(yg - yc) / (b^2);
     ARow = [ 0, 0, -beta, 0, -gamma, 0, 0, 0, 0, 0 ];
-    bRow = alpha - beta * xg - gamma * yg - extraDistance;
+    bRow = alpha - beta * xg - gamma * yg;
 end
 
-function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b, extraDistance)
+function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b)
     xg_p = xg + ropeLen * sin(thetag); 
     yg_p = yg + ropeLen * sin(phig); 
     alpha = ellipseEval(xg_p, yg_p, xc, yc, a, b);
@@ -356,7 +354,17 @@ function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc
     bx = ropeLen * cos(thetag);
     by = ropeLen * cos(phig);
     ARow = [ 0, 0, -beta, 0, -gamma, 0, -beta*bx, 0, -gamma*by, 0 ];
-    bRow = alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay - extraDistance;
+    bRow = alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay;
+end
+
+function [ARows, bRows] = finalPositionRows(r, tolerances, i, N)
+    selPos = [1 0 0 0 0 0 0 0; 
+              0 0 1 0 0 0 0 0];
+    ARows = [ zeros(4, 10*i), [selPos; -selPos], zeros(4, 10*N-10*i) ];
+    bRows = [ r(1,:) + tolerances(1,:)/2; 
+              r(3,:) + tolerances(3,:)/2; 
+              - r(1,:) + tolerances(1,:)/2; 
+              - r(3,:) + tolerances(3,:)/2 ];
 end
 
 function [ARows, bRows] = finalRows(r, tolerancesState, tolerancesInput, i, N)
@@ -657,7 +665,7 @@ function [A, b] = inequalityConstraintsInitialGuess(N, ropeLen, rectConstraints,
     A = zeros(0, 8+10*N);
     b = zeros(0, 1);
     
-    for i=1:N
+    for i=1:N-1
         % input physical limits
         [A1, b1] = physicalLims;
         
@@ -666,7 +674,7 @@ function [A, b] = inequalityConstraintsInitialGuess(N, ropeLen, rectConstraints,
         
         % combine matrices
         A_tmp = [A1;A2];
-        A_tmp2 = [zeros(size(A_tmp,1), i*10-2), A_tmp, zeros(size(A_tmp,1), 10*N-i*10)];
+        A_tmp2 = [zeros(size(A_tmp,1), i*10), A_tmp, zeros(size(A_tmp,1), 8+10*N-i*10-10)];
         A = [A; A_tmp2];
         b = [b; b1;b2];
     end
@@ -693,8 +701,8 @@ end
 
 function [ARows, bRows] = rectLimsRowsInitialGuess(rectConstraints)
     [DRect,chRect,clRect] = rectCon(rectConstraints);
-    D = [ 0 0 DRect(1,1) 0 DRect(1,2) 0 0 0 0 0; 
-          0 0 DRect(2,1) 0 DRect(2,2) 0 0 0 0 0 ];
+    D = [ DRect(1,1) 0 DRect(1,2) 0 0             0 0             0 0 0; 
+          DRect(2,1) 0 DRect(2,2) 0 0             0 0             0 0 0 ];
     ARows = [D; -D];
     bRows = [ chRect;  
               -clRect ];

@@ -1,4 +1,4 @@
-function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phig)
+function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phig, extraDistance)
     ellList = [];
     ellVals = [];
     ellObjVals = [];
@@ -22,7 +22,7 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
     n_constr = min(2, length(indexesCart));
     for ellInd=1:indexesCart(1:n_constr)
         ell = ellList(ellInd);
-        [ARow1, bRow1] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b);
+        [ARow1, bRow1] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b, extraDistance);
         ARows = [ARows; ARow1];
         bRows = [bRows; bRow1];
     end 
@@ -30,7 +30,7 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
     n_constr = min(2, length(indexesObj));
     for ellInd=1:indexesObj(1:n_constr)
         ell = ellList(ellInd);
-        [ARow2, bRow2] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, ell.xc, ell.yc, ell.a, ell.b);
+        [ARow2, bRow2] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, ell.xc, ell.yc, ell.a, ell.b, extraDistance);
         ARows = [ARows; ARow2];
         bRows = [bRows; bRow2];
     end 

@@ -10,10 +10,11 @@ param.start = shape.start;
 param.target = shape.target;     
 param.Wmax = shape.Wmax;   
 
-param.Ts = 0.05; % set sampling period
+param.Ts = 0.1; % set sampling period
 param.TsFactor = 5; % set sampling frequency reduction factor for initial non-linear optimisation
 param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
 
+param.extraDistanceEllipses = 0.1;
 
 % This is a sample way to send reference points
 param.xTar = shape.target(1);

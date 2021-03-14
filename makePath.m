@@ -41,7 +41,7 @@ function [success,path] = makePath(A,B,C,D,h,start,target,rectConstr,ellConstr) 
        error = "Path Finding failed, MaxIter reached" 
        success = false;
     end
-    
+       
     path = rect2path(outRect, trgt_ind, minx, miny, h);
 end
 

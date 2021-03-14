@@ -1,4 +1,4 @@
-function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b)
+function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b, extraDistance)
     xg_p = xg + ropeLen * sin(thetag); 
     yg_p = yg + ropeLen * sin(phig); 
     alpha = ellipseEval(xg_p, yg_p, xc, yc, a, b);
@@ -8,7 +8,7 @@ function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc
     ay = ropeLen * (sin(phig) - phig*cos(phig));
     bx = ropeLen * cos(thetag);
     by = ropeLen * cos(phig);
-    ARow = [ -beta, 0, -gamma, 0, -beta*bx, 0, -gamma*by, 0, 0, 0 ];
-    bRow = alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay;
+    ARow = [ 0, 0, -beta, 0, -gamma, 0, -beta*bx, 0, -gamma*by, 0 ];
+    bRow = alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay - extraDistance;
 end
 
