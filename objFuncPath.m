@@ -8,3 +8,7 @@ function out = objFuncPath(w, w0, N)
     diff = w_r - w0_r;
     out = diff' * diff;
 end
+
+
+%% manipulate vectors
+

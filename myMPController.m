@@ -18,7 +18,8 @@ N = param.N;
 %     w0(end-7:end) = fref;
 % end
 
-
+% number of slack variables for soft constraints
+nSlackVars = param.nSlackVars;
 
 persistent iter
 if isempty(iter)
@@ -27,7 +28,8 @@ else
     iter = iter + 1;
 end
 
-w0 = param.wref(iter*10+1:(iter+N)*10+8);
+secLen = 10 + nSlackVars;
+w0 = param.wref(iter*secLen+1:(iter+N)*secLen+8+nSlackVars);
 
 
 % objective function (w contains N+1 x vectors and N u vectors)
@@ -40,44 +42,33 @@ ropeLen =  param.craneParams.r;
 rectConstr = param.constraints.rect;
 ellConstr = param.constraints.ellipses;
 n_at_equilibrium = max(0, iter - param.Tf / param.Ts + 1 + N);
-extraDist = param.extraDistanceEllipses;
-[A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, w0, n_at_equilibrium, extraDist);
+extraDistEll = param.extraDistanceEllipses;
+extraDistRect = param.extraDistanceRectangles;
+[A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, w0, n_at_equilibrium, extraDistEll, extraDistRect, nSlackVars);
 
 % linear equality constraints (currently only equality constraint on x0)
-[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts);
-
-% non-linear constraints
-% nonlcon = @(w) nonLinearConstraints(param.Ts, param.craneParams, w);
-
-% options
-% options = optimoptions(@fmincon);
+[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts, nSlackVars);
 
 % optimisation
 A = sparse(A);
 Aeq = sparse(Aeq);
-% w = fmincon(objFunc,w0,A,b,Aeq,beq);
-% H = zeros(size(A,2));
-% for i=1:N
-%     H(i*13-2:i*13-1,i*13-2:i*13-1) = eye(2);
-% end
-% H = sparse(H);
-% options = optimoptions('fmincon','Algorithm','interior-point');
-% w = quadprog(H,zeros(1,size(A,2)),A,b,Aeq,beq);
 
 % penBlock = [ones(10,1); zeros(10*(param.TsFactor-1),1)];
 % n_blocks = N/param.TsFactor;
 % penalties = [kron(ones(n_blocks,1), penBlock); ones(8,1)];
 xPen = 1;
 uPen = 0.001;
-penaltyBlk = [xPen * ones(8,1); uPen * ones(2,1)]; 
-penalties = [ kron(ones(N,1), penaltyBlk); 10 * ones(8,1) ];
+lambdaPen = 1000;
+penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1); ]; 
+penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];
+penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 H = diag(penalties);
 
 persistent prevW
 if isempty(prevW)
-    refTraj = [x_hat(1:8); param.wref((iter+1)*10+9:(iter+N+1)*10+8)];
+    refTraj = [x_hat(1:8); param.wref((iter+1)*secLen+9+nSlackVars:(iter+N+1)*secLen+8+nSlackVars)];
 else
-    refTraj = [x_hat(1:8); prevW(19:end); param.wref((iter+N+1)*10-1:(iter+N+1)*10+8)];
+    refTraj = [x_hat(1:8); prevW(19+2*nSlackVars:end); param.wref((iter+N+1)*secLen-1:(iter+N+1)*10+8+nSlackVars)];
 end
 
 %refTraj = param.wref(iter*10+1:(iter+N)*10+8);

@@ -1,21 +1,23 @@
-function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectConstraints, ellipses, w, n_final, extraDistanceEllipses)
+function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectConstraints, ellipses, w, n_final, extraDistanceEllipses, extraDistRect, nSlackVars)
+    secLen = 10 + nSlackVars;
+
     if n_final < N + 1
-        A = zeros(0, 8+10*N);
+        A = zeros(0, 8+secLen*N);
         b = zeros(0, 1);
     else
-        A = [ zeros(4,8), [eye(2); -eye(2)], zeros(4,10*(N-1)+8) ];
+        A = [ zeros(4,8), [eye(2); -eye(2)], zeros(4,secLen*(N-1)+secLen-2) ];
         b = [ tolInput; tolInput ];
     end
     
     for i=1:N
         % input physical limits
-        [A1, b1] = physicalLims;
+        [A1, b1] = physicalLimsWithSlack(nSlackVars);
         
         % rectangle constraints
-        [A2, b2] = rectLimsRows(rectConstraints, ropeLen, w(10*i+5), w(10*i+7));
+        [A2, b2] = rectLimsRows(rectConstraints, ropeLen, w(10*i+5), w(10*i+7), extraDistRect, nSlackVars);
         
         % ellipse constraints
-        [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7), extraDistanceEllipses);
+        [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7), extraDistanceEllipses, nSlackVars);
         
         
         A_tmp = [A1;A2;A3];

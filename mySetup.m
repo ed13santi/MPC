@@ -15,6 +15,9 @@ param.TsFactor = 5; % set sampling frequency reduction factor for initial non-li
 param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
 
 param.extraDistanceEllipses = 0.1;
+param.extraDistanceRectangles = 0.1;
+n_ellipses = size(param.constraints.ellipses, 1) * size(param.constraints.ellipses, 2);
+param.nSlackVars = 4 + 2*min(2, n_ellipses);
 
 % This is a sample way to send reference points
 param.xTar = shape.target(1);
@@ -54,9 +57,11 @@ hold on;
 scatter(plotxp, plotyp);
 hold off;
 
+param.w_guess = convertToIncludeSlackVars(param.w_guess, param.nSlackVars);
+
 simulationLength = 20;
 extraCopies = simulationLength / param.Ts + param.N - (length(param.w_guess) - 8)/10 + param.TsFactor;
-param.wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end)]) ]; 
+param.wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end);zeros(param.nSlackVars,1)]) ]; 
 
 end % End of mySetup
 
