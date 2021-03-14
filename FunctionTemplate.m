@@ -318,14 +318,16 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
     bRows = zeros(length(ellList)*2,1);
     
     % constraints of cart
-    for ellInd=1:indexesCart(1:2)
+    n_constr = min(2, length(indexesCart));
+    for ellInd=1:indexesCart(1:n_constr)
         ell = ellList(ellInd);
         [ARow1, bRow1] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b);
         ARows = [ARows; ARow1];
         bRows = [bRows; bRow1];
     end 
     %constraints of object
-    for ellInd=1:indexesObj(1:2)
+    n_constr = min(2, length(indexesObj));
+    for ellInd=1:indexesObj(1:n_constr)
         ell = ellList(ellInd);
         [ARow2, bRow2] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, ell.xc, ell.yc, ell.a, ell.b);
         ARows = [ARows; ARow2];

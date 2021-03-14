@@ -5,7 +5,7 @@
 % `FunctionTemplate.m`.
 %
 % Author: Ian McInerney
-% Revision: 2021.1
+% Revision: 2021.2
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -18,7 +18,10 @@ clear variables
 perturbSize = 0.1;
 
 % The part of the core coursework that is being worked on
-partNum = 3;
+partNum = 1;
+
+% Introduce a second ellipse to the course for part 2
+useSecondEllipse = 1;
 
 
 %% Load the parameters for the Simulation model
@@ -28,6 +31,18 @@ load('Crane_NominalParameters.mat');
 %% Create the shape to test on
 testCourse = defaultCourse( 0, partNum );
 
+% Only for part 2 - add a second ellipse
+if( partNum == 2 && useSecondEllipse == 1 )
+    % Define the new ellipse
+    ellipse.a  = 0.3;
+    ellipse.b  = 0.17;
+    ellipse.xc = 0.25;
+    ellipse.yc = 0.35;
+    testCourse.shape.constraints.ellipses{2} = ellipse;
+    
+    % Add another index to the penalties array for the new ellipse
+    testCourse.penalties = [ testCourse.penalties, -1];
+end
 
 
 %% Perturb the parameters
@@ -61,9 +76,6 @@ craneParams.Vl = testCourse.perturb.Vl * Vl;
 craneParams.Vx = testCourse.perturb.Vx * Vx;
 craneParams.Vy = testCourse.perturb.Vy * Vy;
 
-%craneParams.Vy = craneParams.Vx
-%craneParams.Tx = 0
-%craneParams.Ty = 0
 
 %% Extract the student functions
 extractFunctions( ['FunctionTemplate.m'], 1 );
@@ -154,10 +166,13 @@ for t=0:Ts:T
     u = myMPController( ref, x_hat, param );
     u = [u; 0]; % we won't use the third input, which is in the Z axis (i.e. the third input increases/decreases the length of the pendulum).
     
+    % Saturate the inputs to [-1, 1] for the simulation
+    usat = min( max( u, -1 ), 1 );
+    
     contTime = toc;
 
     % Setup the simulation model
-    mod = @(t, state) crane_nl_model( u, state, craneParams );
+    mod = @(t, state) crane_nl_model( usat, state, craneParams );
     
     % Simulate
     [tt, x] = ode23t( mod, [t:tstep:t + Ts], x(end,:), odeOpts );
@@ -180,7 +195,5 @@ close(hw);
 
 
 %% Visualize the Course
-% allContTime
 [~, ~, ~, text] = analyzeCourse( [], time, states, inputs, allContTime, testCourse, r, 1 );
 fprintf(text)
-
