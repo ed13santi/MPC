@@ -12,7 +12,7 @@ function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc
     slackVars = zeros(1, ellSlackVars);
     slackVars(2*ellIndex) = -1;
     ARow = [ ARow, slackVars ];
-    ARow = [ ARow; [zeros(1, 14), -slackVars] ];
+    ARow = [ ARow; [zeros(1, 14), slackVars] ];
     bRow = [ 0;
              - (alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay - extraDistance) ];
 end

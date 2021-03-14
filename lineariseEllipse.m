@@ -6,7 +6,7 @@ function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDistance, el
     slackVars = zeros(1, ellSlackVars);
     slackVars(:, 2*ellIndex-1) = -1;
     ARow = [ ARow, slackVars ];
-    ARow = [ ARow; [zeros(1, 14), -slackVars] ];
+    ARow = [ ARow; [zeros(1, 14), slackVars] ];
     bRow = [ 0;
              - (alpha - beta * xg - gamma * yg - extraDistance) ];
 end

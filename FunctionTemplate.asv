@@ -41,27 +41,29 @@ param.craneParams = load('Crane_NominalParameters.mat');
 %non-linear model
 param.w_guess = runInitialOptimisation(targetState, initialState, param, param.TsFactor);
 
+param.w_guess = convertToIncludeSlackVars(param.w_guess, param.nSlackVars);
+
+segLen = 10+param.nSlackVars;
+simulationLength = 20;
+extraCopies = simulationLength / param.Ts + param.N - (length(param.w_guess) - segLen + 2)/segLen + param.TsFactor;
+param.wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7-param.nSlackVars:end-param.nSlackVars);zeros(param.nSlackVars,1)]) ]; 
+
 figure;
 plotx = [];
 ploty = [];
 plotxp = [];
 plotyp = [];
-for i=1:(length(param.w_guess)-8)/10+1
-   plotx = [plotx param.w_guess(i*10-9)]; 
-   ploty = [ploty param.w_guess(i*10-7)]; 
-   plotxp = [plotxp param.w_guess(i*10-9)+param.craneParams.r*sin(param.w_guess(i*10-5))]; 
-   plotyp = [plotyp param.w_guess(i*10-7)+param.craneParams.r*sin(param.w_guess(i*10-3))];
+for i=1:(length(param.w_guess)-8)/segLen+1
+   plotx = [plotx param.w_guess((i-1)*segLen+1)]; 
+   ploty = [ploty param.w_guess((i-1)*segLen+3)]; 
+   plotxp = [plotxp param.w_guess((i-1)*segLen+1)+param.craneParams.r*sin(param.w_guess((i-1)*segLen+5))]; 
+   plotyp = [plotyp param.w_guess((i-1)*segLen+3)+param.craneParams.r*sin(param.w_guess((i-1)*segLen+7))];
 end
 scatter(plotx, ploty);
 hold on;
 scatter(plotxp, plotyp);
 hold off;
 
-param.w_guess = convertToIncludeSlackVars(param.w_guess, param.nSlackVars);
-
-simulationLength = 20;
-extraCopies = simulationLength / param.Ts + param.N - (length(param.w_guess) - 8)/10 + param.TsFactor;
-param.wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7:end);zeros(param.nSlackVars,1)]) ]; 
 
 end % End of mySetup
 
@@ -116,8 +118,15 @@ else
 end
 
 secLen = 10 + nSlackVars;
-w0 = param.wref(iter*secLen+1:(iter+N)*secLen+8+nSlackVars);
+w0 = [param.wref(iter*secLen+1:iter*secLen+8);
+      param.wref((iter+1)*secLen-1:(iter+N)*secLen+8+nSlackVars)]; 
 
+persistent prevW
+if isempty(prevW)
+    refTraj = [x_hat(1:8); param.wref((iter+1)*secLen+9+nSlackVars:(iter+N+1)*secLen+8+nSlackVars)];
+else
+    refTraj = [x_hat(1:8); prevW(19+nSlackVars:end); param.wref((iter+N+1)*secLen-1:(iter+N+1)*secLen+8+nSlackVars)];
+end
 
 % objective function (w contains N+1 x vectors and N u vectors)
 %objFunc = @(w) objFuncN(w, N);
@@ -151,15 +160,16 @@ penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 H = diag(penalties);
 
-persistent prevW
-if isempty(prevW)
-    refTraj = [x_hat(1:8); param.wref((iter+1)*secLen+9+nSlackVars:(iter+N+1)*secLen+8+nSlackVars)];
-else
-    refTraj = [x_hat(1:8); prevW(19+2*nSlackVars:end); param.wref((iter+N+1)*secLen-1:(iter+N+1)*10+8+nSlackVars)];
-end
+
 
 %refTraj = param.wref(iter*10+1:(iter+N)*10+8);
 f = - H * refTraj;
+% size(H)
+% size(f)
+% size(A)
+% size(b)
+% size(Aeq)
+% size(beq)
 w = quadprog(H,f,A,b,Aeq,beq);
 
 prevW = w;
@@ -206,7 +216,7 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
         A = zeros(0, 8+secLen*N);
         b = zeros(0, 1);
     else
-        A = [ zeros(4,8), [eye(2); -eye(2)], zeros(4,secLen*(N-1)+secLen-2) ];
+        A = [ zeros(4,8), [eye(2); -eye(2)], zeros(4,secLen*N-2) ];
         b = [ tolInput; tolInput ];
     end
     
@@ -221,14 +231,14 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
         [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7), extraDistanceEllipses, nSlackVars);
         
         
-        A_tmp = [A1;A2;A3];
-        A_tmp2 = [zeros(size(A_tmp,1), i*10-2), A_tmp, zeros(size(A_tmp,1), 10*N-i*10)];
+        A_tmp = [A1];
+        A_tmp2 = [zeros(size(A_tmp,1), 8+(i-1)*secLen), A_tmp, zeros(size(A_tmp,1), secLen*N-i*secLen)];
         A = [A; A_tmp2];
-        b = [b; b1;b2;b3];
+        b = [b; b1];
         
         if N - i < n_final
             % final state/input constraint
-            [A4, b4] = finalRows(r, tolState, tolInput, i, N);
+            [A4, b4] = finalRows(r, tolState, tolInput, i, N, nSlackVars);
             A = [A; A4];
             b = [b; b4];
         end
@@ -236,7 +246,7 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
     
     if n_final > 0
         % final state/input constraint
-        [A_tmp, b_tmp] = finalRows(r, tolState, tolInput, N, N);
+        [A_tmp, b_tmp] = finalRows(r, tolState, tolInput, N, N, nSlackVars);
         A = [A; A_tmp];
         b = [b; b_tmp];
     end
@@ -297,18 +307,18 @@ function [ARows, bRows] = rectLimsRows(rectConstraints, ropeLen, thetag, phig, e
           0 0 DRect(2,1) 0 DRect(2,2) 0 0             0 0             0; 
           0 0 DRect(1,1) 0 DRect(1,2) 0 bx*DRect(1,1) 0 by*DRect(1,2) 0;
           0 0 DRect(2,1) 0 DRect(2,2) 0 by*DRect(2,1) 0 by*DRect(2,2) 0 ];
-    ARows = [ [ D, -eye(4), zeros(4,max(0, nSlackVars-4)) ]; 
+    ARows = [ [ D,           -eye(4), zeros(4,max(0, nSlackVars-4)) ]; 
               [ zeros(4,10), -eye(4), zeros(4,max(0, nSlackVars-4)) ];
-              [ -D, -eye(4), zeros(4,max(0, nSlackVars-4)) ]; 
+              [ -D,          -eye(4), zeros(4,max(0, nSlackVars-4)) ]; 
               [ zeros(4,10), -eye(4), zeros(4,max(0, nSlackVars-4)) ] ];
     offset = [ - ax * DRect(1,1) - ay * DRect(1,2);
                - ax * DRect(2,1) - ay * DRect(2,2) ];
-    bRows = [ zeros(4,1);
-              - chRect - extraDistRect; 
-              - chRect - offset - extraDistRect; 
-              zeros(4,1);
-              clRect - extraDistRect;
-              clRect + offset - extraDistRect ];
+    bRows = [ - extraDistRect * ones(4,1);
+              - chRect; 
+              - chRect - offset; 
+              - extraDistRect * ones(4,1);
+              clRect;
+              clRect + offset ];
 end
 
 function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phig, extraDistance, nSlackVars)
@@ -334,18 +344,16 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
     ellipseSlackVars = nSlackVars - 4;
     
     % constraints of cart
-    for ellInd=1:indexesCart(1:ellipseSlackVars/2)
-        ell = ellList(ellInd);
-        [ARow1, bRow1] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b, extraDistance, ellipseSlackVars, ellInd);
-        size(ARows)
-        size(ARow1)
+    for i=1:ellipseSlackVars/2
+        ell = ellList(indexesCart(i));
+        [ARow1, bRow1] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b, extraDistance, ellipseSlackVars, i);
         ARows = [ARows; ARow1];
         bRows = [bRows; bRow1];
     end 
     %constraints of object
-    for ellInd=1:indexesObj(1:ellipseSlackVars/2)
-        ell = ellList(ellInd);
-        [ARow2, bRow2] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, ell.xc, ell.yc, ell.a, ell.b, extraDistance, ellipseSlackVars, ellInd);
+    for i=1:ellipseSlackVars/2
+        ell = ellList(indexesObj(i));
+        [ARow2, bRow2] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, ell.xc, ell.yc, ell.a, ell.b, extraDistance, ellipseSlackVars, i);
         ARows = [ARows; ARow2];
         bRows = [bRows; bRow2];
     end 
@@ -359,7 +367,7 @@ function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDistance, el
     slackVars = zeros(1, ellSlackVars);
     slackVars(:, 2*ellIndex-1) = -1;
     ARow = [ ARow, slackVars ];
-    ARow = [ ARow; [zeros(1, 14), -slackVars] ];
+    ARow = [ ARow; [zeros(1, 14), slackVars] ];
     bRow = [ 0;
              - (alpha - beta * xg - gamma * yg - extraDistance) ];
 end
@@ -378,18 +386,19 @@ function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc
     slackVars = zeros(1, ellSlackVars);
     slackVars(2*ellIndex) = -1;
     ARow = [ ARow, slackVars ];
-    ARow = [ ARow; [zeros(1, 14), -slackVars] ];
+    ARow = [ ARow; [zeros(1, 14), slackVars] ];
     bRow = [ 0;
              - (alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay - extraDistance) ];
 end
 
-function [ARows, bRows] = finalRows(r, tolerancesState, tolerancesInput, i, N)
+function [ARows, bRows] = finalRows(r, tolerancesState, tolerancesInput, i, N, nSlackVars)
+    segLen = 10 + nSlackVars;
     if i == N
-        ARows = [ zeros(16, 10*i), [eye(8); -eye(8)] ];
+        ARows = [ zeros(16, 10+segLen*(i-1)), [eye(8); -eye(8)], zeros(16, nSlackVars) ];
         bRows = [ r + tolerancesState/2;
                   - r + tolerancesState/2 ];
     else
-        ARows = [ zeros(20, 10*i), [eye(10); -eye(10)], zeros(20, 10*N-10*i-2) ];
+        ARows = [ zeros(20, 10+segLen*(i-1)), [eye(10); -eye(10)], zeros(20, segLen*(N-i)+nSlackVars-2) ];
         bRows = [ r + tolerancesState/2;
                   tolerancesInput;
                   - r + tolerancesState/2;
@@ -998,10 +1007,10 @@ end
 
 %% manipulate vectors
 
-function long = convertToIncludeSlackVars(short, nSlackVars);
+function long = convertToIncludeSlackVars(short, nSlackVars)
     short = [0;0;short];
     resized = reshape(short,10,[]);
     resized = [resized; zeros(nSlackVars, size(resized,2))];
-    long = reshape(resized, [], 1);
+    long = reshape(resized, size(resized,1)*size(resized,2), 1);
     long = long(3:end);
 end

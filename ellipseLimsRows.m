@@ -24,8 +24,6 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
     for i=1:ellipseSlackVars/2
         ell = ellList(indexesCart(i));
         [ARow1, bRow1] = lineariseEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b, extraDistance, ellipseSlackVars, i);
-        size(ARows)
-        size(ARow1)
         ARows = [ARows; ARow1];
         bRows = [bRows; bRow1];
     end 

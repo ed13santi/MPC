@@ -29,8 +29,15 @@ else
 end
 
 secLen = 10 + nSlackVars;
-w0 = param.wref(iter*secLen+1:(iter+N)*secLen+8+nSlackVars);
+w0 = [param.wref(iter*secLen+1:iter*secLen+8);
+      param.wref((iter+1)*secLen-1:(iter+N)*secLen+8+nSlackVars)]; 
 
+persistent prevW
+if isempty(prevW)
+    refTraj = [x_hat(1:8); param.wref((iter+1)*secLen+9+nSlackVars:(iter+N+1)*secLen+8+nSlackVars)];
+else
+    refTraj = [x_hat(1:8); prevW(19+nSlackVars:end); param.wref((iter+N+1)*secLen-1:(iter+N+1)*secLen+8+nSlackVars)];
+end
 
 % objective function (w contains N+1 x vectors and N u vectors)
 %objFunc = @(w) objFuncN(w, N);
@@ -64,15 +71,20 @@ penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 H = diag(penalties);
 
-persistent prevW
-if isempty(prevW)
-    refTraj = [x_hat(1:8); param.wref((iter+1)*secLen+9+nSlackVars:(iter+N+1)*secLen+8+nSlackVars)];
-else
-    refTraj = [x_hat(1:8); prevW(19+2*nSlackVars:end); param.wref((iter+N+1)*secLen-1:(iter+N+1)*10+8+nSlackVars)];
-end
+penaltyBlkf = [uPen * ones(2,1); xPen * ones(8,1); zeros(nSlackVars,1); ]; 
+penaltiesf = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlkf) ];
+penaltiesf(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
+Hf = diag(penaltiesf);
+
 
 %refTraj = param.wref(iter*10+1:(iter+N)*10+8);
-f = - H * refTraj;
+f = - Hf * refTraj;
+% size(H)
+% size(f)
+% size(A)
+% size(b)
+% size(Aeq)
+% size(beq)
 w = quadprog(H,f,A,b,Aeq,beq);
 
 prevW = w;

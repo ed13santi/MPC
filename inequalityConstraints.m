@@ -5,7 +5,7 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
         A = zeros(0, 8+secLen*N);
         b = zeros(0, 1);
     else
-        A = [ zeros(4,8), [eye(2); -eye(2)], zeros(4,secLen*(N-1)+secLen-2) ];
+        A = [ zeros(4,8), [eye(2); -eye(2)], zeros(4,secLen*N-2) ];
         b = [ tolInput; tolInput ];
     end
     
@@ -20,24 +20,24 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
         [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7), extraDistanceEllipses, nSlackVars);
         
         
-        A_tmp = [A1;A2;A3];
-        A_tmp2 = [zeros(size(A_tmp,1), i*10-2), A_tmp, zeros(size(A_tmp,1), 10*N-i*10)];
+        A_tmp = [A1];
+        A_tmp2 = [zeros(size(A_tmp,1), 8+(i-1)*secLen), A_tmp, zeros(size(A_tmp,1), secLen*N-i*secLen)];
         A = [A; A_tmp2];
-        b = [b; b1;b2;b3];
+        b = [b; b1];
         
         if N - i < n_final
             % final state/input constraint
-            [A4, b4] = finalRows(r, tolState, tolInput, i, N);
-            A = [A; A4];
-            b = [b; b4];
+            [A4, b4] = finalRows(r, tolState, tolInput, i, N, nSlackVars);
+%             A = [A; A4];
+%             b = [b; b4];
         end
     end
     
     if n_final > 0
         % final state/input constraint
-        [A_tmp, b_tmp] = finalRows(r, tolState, tolInput, N, N);
-        A = [A; A_tmp];
-        b = [b; b_tmp];
+        [A_tmp, b_tmp] = finalRows(r, tolState, tolInput, N, N, nSlackVars);
+%         A = [A; A_tmp];
+%         b = [b; b_tmp];
     end
 end
 
