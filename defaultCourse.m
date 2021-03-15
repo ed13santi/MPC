@@ -91,7 +91,7 @@ elseif coursenum==3
     constraints.ellipses={ellipse0,ellipse1,ellipse2,ellipse3};
     penalties = [-1, -1, -1, -1, -1, -1, -1, -1];
     start=[0, 0.6];
-    target=[0.5, 0.5];
+    target=[0.3, 0.5];
     
     
     

@@ -40,13 +40,15 @@ param.craneParams = load('Crane_NominalParameters.mat');
 %Run initial optimisation over whole length of episode using fully
 %non-linear model
 param.w_guess = runInitialOptimisation(targetState, initialState, param, param.TsFactor);
-
+% convert to xXuxXu...xXuxX format
 param.w_guess = convertToIncludeSlackVars(param.w_guess, param.nSlackVars);
 
 segLen = 10+param.nSlackVars;
 simulationLength = 20;
 extraCopies = simulationLength / param.Ts + param.N - (length(param.w_guess) - segLen + 2)/segLen + param.TsFactor;
-param.wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7-param.nSlackVars:end-param.nSlackVars);zeros(param.nSlackVars,1)]) ]; 
+blk = [0;0;param.w_guess(end-7-param.nSlackVars:end-param.nSlackVars);zeros(param.nSlackVars,1)]; % uxX
+repBlk = kron(ones(extraCopies,1), blk); % uxXuxXuxXuxXuxXuxXuxX
+param.wref = [ param.w_guess; repBlk ]; % xXuxXu...xXuxX
 
 figure;
 plotx = [];
@@ -64,8 +66,6 @@ hold on;
 scatter(plotxp, plotyp);
 hold off;
 
-WHATX = plotx(end)
-WHATX = ploty(end)
 
 
 end % End of mySetup

@@ -29,14 +29,24 @@ else
 end
 
 secLen = 10 + nSlackVars;
-w0 = [param.wref(iter*secLen+1:iter*secLen+8);
-      param.wref((iter+1)*secLen-1:(iter+N)*secLen+8+nSlackVars)]; 
+w0 = [param.wref(iter*secLen+1:iter*secLen+8); % x
+      param.wref((iter+1)*secLen-1:(iter+N)*secLen+8+nSlackVars)]; % uxXuxXuxXuxXuxX
+% w0 = xuxXuxXuxXuxXuxX
 
 persistent prevW
+% wref = % xXuxXu...xXuxX
 if isempty(prevW)
-    refTraj = [x_hat(1:8); param.wref((iter+1)*secLen+9+nSlackVars:(iter+N+1)*secLen+8+nSlackVars)];
+    start = (iter+1)*secLen+9+nSlackVars; % start of u
+    fin   = (iter+N+1)*secLen+8+nSlackVars; % end of X ---> uxXuxXuxXuxXuxX
+    refTraj = [x_hat(1:8); param.wref(start:fin)]; % xuxXuxXuxXuxXuxX
 else
-    refTraj = [x_hat(1:8); prevW(19+nSlackVars:end); param.wref((iter+N+1)*secLen-1:(iter+N+1)*secLen+8+nSlackVars)];
+    piece1 = x_hat(1:8); % 
+    % prevW = xuxXuxXuxXuxXuxX
+    piece2 = prevW(19+nSlackVars:end); % uxXuxXuxXuxXuxX
+    start = (iter+N+1)*secLen-1; % start of u
+    fin   = (iter+N+1)*secLen+8+nSlackVars; % end of X 
+    piece3 = param.wref(start:fin); % uxXuxXuxXuxXuxX
+    refTraj = [piece1; piece2; piece3]; % xuxXuxXuxXuxXuxX
 end
 
 % objective function (w contains N+1 x vectors and N u vectors)
@@ -66,8 +76,8 @@ Aeq = sparse(Aeq);
 xPen = 1;
 uPen = 0.001;
 lambdaPen = 1000;
-penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1); ]; 
-penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];
+penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1); ];  %uxX
+penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];  % xuxXuxXuxXuxX
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 H = diag(penalties);
 

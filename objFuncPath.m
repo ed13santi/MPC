@@ -12,3 +12,5 @@ end
 
 %% manipulate vectors
 
+% convert from xuxu...xux format
+% convert to xXuxXu...xXuxX format

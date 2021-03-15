@@ -40,13 +40,15 @@ param.craneParams = load('Crane_NominalParameters.mat');
 %Run initial optimisation over whole length of episode using fully
 %non-linear model
 param.w_guess = runInitialOptimisation(targetState, initialState, param, param.TsFactor);
-
+% convert to xXuxXu...xXuxX format
 param.w_guess = convertToIncludeSlackVars(param.w_guess, param.nSlackVars);
 
 segLen = 10+param.nSlackVars;
 simulationLength = 20;
 extraCopies = simulationLength / param.Ts + param.N - (length(param.w_guess) - segLen + 2)/segLen + param.TsFactor;
-param.wref = [ param.w_guess; kron(ones(extraCopies,1), [0;0;param.w_guess(end-7-param.nSlackVars:end-param.nSlackVars);zeros(param.nSlackVars,1)]) ]; 
+blk = [0;0;param.w_guess(end-7-param.nSlackVars:end-param.nSlackVars);zeros(param.nSlackVars,1)]; % uxX
+repBlk = kron(ones(extraCopies,1), blk); % uxXuxXuxXuxXuxXuxXuxX
+param.wref = [ param.w_guess; repBlk ]; % xXuxXu...xXuxX
 
 figure;
 plotx = [];
@@ -63,6 +65,7 @@ scatter(plotx, ploty);
 hold on;
 scatter(plotxp, plotyp);
 hold off;
+
 
 
 end % End of mySetup
@@ -118,14 +121,24 @@ else
 end
 
 secLen = 10 + nSlackVars;
-w0 = [param.wref(iter*secLen+1:iter*secLen+8);
-      param.wref((iter+1)*secLen-1:(iter+N)*secLen+8+nSlackVars)]; 
+w0 = [param.wref(iter*secLen+1:iter*secLen+8); % x
+      param.wref((iter+1)*secLen-1:(iter+N)*secLen+8+nSlackVars)]; % uxXuxXuxXuxXuxX
+% w0 = xuxXuxXuxXuxXuxX
 
 persistent prevW
+% wref = % xXuxXu...xXuxX
 if isempty(prevW)
-    refTraj = [x_hat(1:8); param.wref((iter+1)*secLen+9+nSlackVars:(iter+N+1)*secLen+8+nSlackVars)];
+    start = (iter+1)*secLen+9+nSlackVars; % start of u
+    fin   = (iter+N+1)*secLen+8+nSlackVars; % end of X ---> uxXuxXuxXuxXuxX
+    refTraj = [x_hat(1:8); param.wref(start:fin)]; % xuxXuxXuxXuxXuxX
 else
-    refTraj = [x_hat(1:8); prevW(19+nSlackVars:end); param.wref((iter+N+1)*secLen-1:(iter+N+1)*secLen+8+nSlackVars)];
+    piece1 = x_hat(1:8); % 
+    % prevW = xuxXuxXuxXuxXuxX
+    piece2 = prevW(19+nSlackVars:end); % uxXuxXuxXuxXuxX
+    start = (iter+N+1)*secLen-1; % start of u
+    fin   = (iter+N+1)*secLen+8+nSlackVars; % end of X 
+    piece3 = param.wref(start:fin); % uxXuxXuxXuxXuxX
+    refTraj = [piece1; piece2; piece3]; % xuxXuxXuxXuxXuxX
 end
 
 % objective function (w contains N+1 x vectors and N u vectors)
@@ -155,15 +168,19 @@ Aeq = sparse(Aeq);
 xPen = 1;
 uPen = 0.001;
 lambdaPen = 1000;
-penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1); ]; 
-penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];
+penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1); ];  %uxX
+penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];  % xuxXuxXuxXuxX
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 H = diag(penalties);
 
+penaltyBlkf = [uPen * ones(2,1); xPen * ones(8,1); zeros(nSlackVars,1); ]; 
+penaltiesf = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlkf) ];
+penaltiesf(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
+Hf = diag(penaltiesf);
 
 
 %refTraj = param.wref(iter*10+1:(iter+N)*10+8);
-f = - H * refTraj;
+f = - Hf * refTraj;
 % size(H)
 % size(f)
 % size(A)
@@ -222,19 +239,19 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
     
     for i=1:N
         % input physical limits
-        [A1, b1] = physicalLimsWithSlack(nSlackVars);
-        
-        % rectangle constraints
-        [A2, b2] = rectLimsRows(rectConstraints, ropeLen, w(10*i+5), w(10*i+7), extraDistRect, nSlackVars);
-        
-        % ellipse constraints
-        [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7), extraDistanceEllipses, nSlackVars);
-        
-        
-        A_tmp = [A1];
-        A_tmp2 = [zeros(size(A_tmp,1), 8+(i-1)*secLen), A_tmp, zeros(size(A_tmp,1), secLen*N-i*secLen)];
-        A = [A; A_tmp2];
-        b = [b; b1];
+%         [A1, b1] = physicalLimsWithSlack(nSlackVars);
+%         
+%         % rectangle constraints
+%         [A2, b2] = rectLimsRows(rectConstraints, ropeLen, w(10*i+5), w(10*i+7), extraDistRect, nSlackVars);
+%         
+%         % ellipse constraints
+%         [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7), extraDistanceEllipses, nSlackVars);
+%         
+%         
+%         A_tmp = [A1];
+%         A_tmp2 = [zeros(size(A_tmp,1), 8+(i-1)*secLen), A_tmp, zeros(size(A_tmp,1), secLen*N-i*secLen)];
+%         A = [A; A_tmp2];
+%         b = [b; b1];
         
         if N - i < n_final
             % final state/input constraint
@@ -394,14 +411,20 @@ end
 function [ARows, bRows] = finalRows(r, tolerancesState, tolerancesInput, i, N, nSlackVars)
     segLen = 10 + nSlackVars;
     if i == N
-        ARows = [ zeros(16, 10+segLen*(i-1)), [eye(8); -eye(8)], zeros(16, nSlackVars) ];
+        %         xuxXuxXuxXu                 x                  X
+        ARows = [ zeros(16, 10+segLen*(i-1)), [eye(8); -eye(8)], zeros(16, nSlackVars) ]; 
         bRows = [ r + tolerancesState/2;
                   - r + tolerancesState/2 ];
     else
-        ARows = [ zeros(20, 10+segLen*(i-1)), [eye(10); -eye(10)], zeros(20, segLen*(N-i)+nSlackVars-2) ];
+        %          xuxXuxXuxXu                 x                  XuxXuxX
+        ARows1 = [ zeros(16, 10+segLen*(i-1)), [eye(8); -eye(8)], zeros(16, segLen*(N-i)+nSlackVars) ];
+        %          xuxXuxXuxXuxX                         u                  xXuxX
+        ARows2 = [ zeros(4, 18+nSlackVars+segLen*(i-1)), [eye(2); -eye(2)], zeros(4, segLen*(N-i)-2) ];
+        ARows = [ARows1; ARows2];
+        
         bRows = [ r + tolerancesState/2;
-                  tolerancesInput;
                   - r + tolerancesState/2;
+                  tolerancesInput;
                   tolerancesInput ];
     end
 end
@@ -412,20 +435,28 @@ end
 %% linear equality constraints
 function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, Ts, nSlackVars)
     secLen = 10 + nSlackVars;
-    xus = [x0; w0(9:end-8)];
-    Aeq = zeros(8+8*N, length(w0));
+    xus = [x0; w0(9:end-8)]; % xuxXuxXuxXuxX
+    Aeq = zeros(8+8*N, length(w0)); 
     beq = zeros(8+8*N, 1);
     
     Aeq(1:8,1:8) = eye(8);
     beq(1:8,:) = x0;
+    
+    x = x0;
+   u = w0(9:10);
+   [A, B, fref] = getLinearisation(x, u, 10, Ts, der, genA, genB);
+   Aeq(8+i8-7:8+i*8, 1:8) = A; 
+   Aeq(8+i8-7:8+i*8, 9:10) = B;
+   Aeq(8+i8-7:8+i*8, 11:18) = - eye(8);
+   beq(8+i8-7:8+i*8) = A*x + B*u - fref;
        
-    for i=1:N
-       x = xus((i-1)*secLen+1:(i-1)*secLen+8);
-       u = xus((i-1)*secLen+9+nSlackVars:(i-1)*secLen+10+nSlackVars);
+    for i=2:N
+       x = xus(10+(i-2)*secLen+1:10+(i-2)*secLen+8); 
+       u = xus(10+(i-2)*secLen+9+nSlackVars:10+(i-2)*secLen+10+nSlackVars);
        [A, B, fref] = getLinearisation(x, u, 10, Ts, der, genA, genB);
-       Aeq(8+i*8-7:8+i*8, (i-1)*secLen+1:(i-1)*secLen+8) = A; 
-       Aeq(8+i*8-7:8+i*8, (i-1)*secLen+9+nSlackVars:(i-1)*secLen+10+nSlackVars) = B;
-       Aeq(8+i*8-7:8+i*8, i*secLen+1:i*secLen+8) = - eye(8);
+       Aeq(8+i*8-7:8+i*8, 10+(i-2)*secLen+1:10+(i-2)*secLen+8) = A; 
+       Aeq(8+i*8-7:8+i*8, 10+(i-2)*secLen+9+nSlackVars:10+(i-2)*secLen+10+nSlackVars) = B;
+       Aeq(8+i*8-7:8+i*8, 10+(i-1)*secLen+1:10+(i-1)*secLen+8) = - eye(8);
        beq(8+i*8-7:8+i*8) = A*x + B*u - fref;
     end
 end
@@ -734,105 +765,9 @@ function [ARows, bRows] = rectLimsRowsInitialGuess(rectConstraints)
               -clRect ];
 end
 
+ 
 
-%% find path
-% 
-% function xs = findPath(finalTrgt, x_hat, N, param)
-%     finalTrgt = [finalTrgt(1); finalTrgt(3)];
-%     x_hat = [x_hat(1); x_hat(3)];
-%     % initial guess x0
-%     x0 = x_hat;
-%     for i=1:N
-%         x0(2*i+1:2*i+2) = (finalTrgt - x_hat) / N * i + x_hat;
-%     end
-%     
-%     % objective function minimises distance between consecutive xs
-%     objFunc = @(x) pathObjFunc(x, N);
-%     
-%     % linear inequality constraint
-%     [A, b] = inequalityConstraintsPath(N, param.constraints.rect);
-% 
-%     % linear equality constraints 
-%     [Aeq, beq] = linearEqConstrPath(x_hat, finalTrgt, N);
-% 
-%     % non-linear constraints
-%     nonlcon = @(x) nonLinearConstraintsPath(true, param.constraints.ellipses, x, N);
-% 
-%     % options
-%     options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);
-% % 
-% %     size(x0)
-% %     size(A)
-% %     size(b)
-% %     size(Aeq)
-% %     size(beq)
-%     
-%     % optimisation
-%     A = sparse(A);
-%     Aeq = sparse(Aeq);
-%     xs = fmincon(objFunc,x0,A,b,Aeq,beq,[],[],nonlcon,options);
-% end
-% 
-% function f = pathObjFunc(x, N)
-%     T = [ [ zeros(2*N,2), eye(2*N) ];
-%           [ zeros(2,2*N), eye(2) ] ];
-%     p = eye(2*(N+1));
-%     H = p - T'*p' - p*T + T'*p*T;
-%     f = x' * H * x;
-% end
-% 
-% function [A, b] = inequalityConstraintsPath(N, rectConstraints)
-%     A = zeros(0, 2+2*N);
-%     b = zeros(0, 1);
-%     
-%     for i=1:N-1        
-%         % rectangle constraints
-%         [A2, b2] = rectLimRowsPath(rectConstraints);
-%         
-%         % combine matrices
-%         A_tmp = [zeros(size(A2,1), i*2), A2, zeros(size(A2,1), 2*N-i*2)];
-%         A = [A; A_tmp];
-%         b = [b; b2];
-%     end
-% end
-% 
-% function [ARows, bRows] = rectLimRowsPath(rectConstraints)
-%     [DRect,chRect,clRect] = rectCon(rectConstraints);
-%     D = [ DRect(1,1) DRect(1,2); 
-%           DRect(2,1) DRect(2,2) ];
-%     ARows = [D; -D];
-%     bRows = [ chRect;  
-%               -clRect ];
-% end
-% 
-% function [Aeq, beq] = linearEqConstrPath(x_first, x_trgt, N)
-%     Aeq = [ [eye(2), zeros(2, 2*N)];
-%             [zeros(2, 2*N), eye(2)] ];
-%     beq = [x_first; x_trgt];
-% end
-% 
-% function [c, ceq] = nonLinearConstraintsPath(ellConstr, ellipses, x_in, N)
-%     % inequality constraints for ellipses
-%     if ellConstr == true
-%         c = [];
-%         for i=1:N-1
-%             x = x_in(2*i+1);
-%             y = x_in(2*i+2);
-%             for j=1:size(ellipses,1)
-%                 for z=1:size(ellipses,2)
-%                     ell = ellipses{j,z};
-%                     c = [c; - ellipseEval(x, y, ell.xc, ell.yc, ell.a, ell.b)];
-%                 end
-%             end
-%         end
-%     else
-%         c = [];
-%     end
-%     
-%     ceq = [];
-% end
-
-%% Find path 2
+%% Find path
 
 function [success,path] = makePath(A,B,C,D,h,start,target,rectConstr,ellConstr) %MAKE SURE START AND TARGET ARE 2 ELEMENT VECTORS
     coords = [A,B,C,D];
@@ -1007,10 +942,12 @@ end
 
 %% manipulate vectors
 
+% convert from xuxu...xux format
+% convert to xXuxXu...xXuxX format
 function long = convertToIncludeSlackVars(short, nSlackVars)
-    short = [0;0;short];
-    resized = reshape(short,10,[]);
-    resized = [resized; zeros(nSlackVars, size(resized,2))];
-    long = reshape(resized, size(resized,1)*size(resized,2), 1);
-    long = long(3:end);
+    short = [0;0;short];  % 00xuxuxuxuxux
+    resized = reshape(short,10,[]); % 00x ux ux ux ux
+    resized = [resized; zeros(nSlackVars, size(resized,2))]; % 00xX uxX uxX uxX
+    long = reshape(resized, size(resized,1)*size(resized,2), 1); % 00xXuxXuxXuxX
+    long = long(3:end); % xXuxXuxXuxX
 end
