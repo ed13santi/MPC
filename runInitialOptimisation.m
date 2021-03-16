@@ -10,7 +10,7 @@ A = param.constraints.rect(1,:);
 B = param.constraints.rect(2,:);
 C = param.constraints.rect(3,:);
 D = param.constraints.rect(4,:);
-[~,xs] = makePath(A',B',C',D',0.005,[x_hat(1); x_hat(3)],[finalTrgt(1); finalTrgt(3)],param.constraints.rect,param.constraints.ellipses);
+xs = makePath(A',B',C',D',0.005,[x_hat(1); x_hat(3)],[finalTrgt(1); finalTrgt(3)],param.constraints.rect,param.constraints.ellipses);
 xs = changeToCorrectLength(xs, N);
 pathPlanningDone = "PATH PLANNING COMPLETED"
 figure;
