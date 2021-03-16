@@ -15,8 +15,8 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
     [~,indexesCart] = sort(ellVals, 'ascend'); % indexes in order of most active due to cart
     [~,indexesObj] = sort(ellObjVals, 'ascend'); % indexes in order of most active due to object
     
-    ARows = zeros(length(ellList)*2,10+nSlackVars);
-    bRows = zeros(length(ellList)*2,1);
+    ARows = zeros(0,10+nSlackVars);
+    bRows = zeros(0,1);
     
     ellipseSlackVars = nSlackVars - 4;
     

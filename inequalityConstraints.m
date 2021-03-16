@@ -10,20 +10,24 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
     end
     
     for i=1:N
+        x = w(10+(i-1)*secLen+1);
+        y = w(10+(i-1)*secLen+3);
+        theta = w(10+(i-1)*secLen+5);
+        phi = w(10+(i-1)*secLen+7);
+        
         % input physical limits
-%         [A1, b1] = physicalLimsWithSlack(nSlackVars);
-%         
-%         % rectangle constraints
-%         [A2, b2] = rectLimsRows(rectConstraints, ropeLen, w(10*i+5), w(10*i+7), extraDistRect, nSlackVars);
-%         
-%         % ellipse constraints
-%         [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7), extraDistanceEllipses, nSlackVars);
-%         
-%         
-%         A_tmp = [A1];
-%         A_tmp2 = [zeros(size(A_tmp,1), 8+(i-1)*secLen), A_tmp, zeros(size(A_tmp,1), secLen*N-i*secLen)];
-%         A = [A; A_tmp2];
-%         b = [b; b1];
+        [A1, b1] = physicalLimsWithSlack(nSlackVars);
+        % rectangle constraints
+        [A2, b2] = rectLimsRows(rectConstraints, ropeLen, theta, phi, extraDistRect, nSlackVars);
+        % ellipse constraints
+        [A3, b3] = ellipseLimsRows(ropeLen, ellipses, x, y, theta, phi, extraDistanceEllipses, nSlackVars);
+        
+        
+        A_tmp = [A1;A2;A3];
+        %                              xuxX             uxX      uxXuxX
+        A_tmp2 = [zeros(size(A_tmp,1), 8+(i-1)*secLen), A_tmp, zeros(size(A_tmp,1), secLen*(N-i))];
+        A = [A; A_tmp2];
+        b = [b;b1;b2;b3];
         
         if N - i < n_final
             % final state/input constraint

@@ -75,13 +75,13 @@ Aeq = sparse(Aeq);
 % penalties = [kron(ones(n_blocks,1), penBlock); ones(8,1)];
 xPen = 1;
 uPen = 0.001;
-lambdaPen = 1000;
-penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1); ];  %uxX
+lambdaPen = 1000000;
+penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); zeros(4,1); lambdaPen * ones(nSlackVars-4,1) ];  %uxX
 penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];  % xuxXuxXuxXuxX
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 H = diag(penalties);
 
-penaltyBlkf = [uPen * ones(2,1); xPen * ones(8,1); zeros(nSlackVars,1); ]; 
+penaltyBlkf = [uPen * ones(2,1); xPen * ones(8,1); zeros(nSlackVars,1) ]; 
 penaltiesf = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlkf) ];
 penaltiesf(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 Hf = diag(penaltiesf);

@@ -167,13 +167,13 @@ Aeq = sparse(Aeq);
 % penalties = [kron(ones(n_blocks,1), penBlock); ones(8,1)];
 xPen = 1;
 uPen = 0.001;
-lambdaPen = 1000;
-penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1); ];  %uxX
+lambdaPen = 1000000;
+penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); zeros(4,1); lambdaPen * ones(nSlackVars-4,1) ];  %uxX
 penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];  % xuxXuxXuxXuxX
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 H = diag(penalties);
 
-penaltyBlkf = [uPen * ones(2,1); xPen * ones(8,1); zeros(nSlackVars,1); ]; 
+penaltyBlkf = [uPen * ones(2,1); xPen * ones(8,1); zeros(nSlackVars,1) ]; 
 penaltiesf = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlkf) ];
 penaltiesf(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 Hf = diag(penaltiesf);
@@ -238,20 +238,24 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
     end
     
     for i=1:N
+        x = w(10+(i-1)*secLen+1);
+        y = w(10+(i-1)*secLen+3);
+        theta = w(10+(i-1)*secLen+5);
+        phi = w(10+(i-1)*secLen+7);
+        
         % input physical limits
-%         [A1, b1] = physicalLimsWithSlack(nSlackVars);
-%         
-%         % rectangle constraints
-%         [A2, b2] = rectLimsRows(rectConstraints, ropeLen, w(10*i+5), w(10*i+7), extraDistRect, nSlackVars);
-%         
-%         % ellipse constraints
-%         [A3, b3] = ellipseLimsRows(ropeLen, ellipses, w(10*i+1), w(10*i+3), w(10*i+5), w(10*i+7), extraDistanceEllipses, nSlackVars);
-%         
-%         
-%         A_tmp = [A1];
-%         A_tmp2 = [zeros(size(A_tmp,1), 8+(i-1)*secLen), A_tmp, zeros(size(A_tmp,1), secLen*N-i*secLen)];
-%         A = [A; A_tmp2];
-%         b = [b; b1];
+        [A1, b1] = physicalLimsWithSlack(nSlackVars);
+        % rectangle constraints
+        [A2, b2] = rectLimsRows(rectConstraints, ropeLen, theta, phi, extraDistRect, nSlackVars);
+        % ellipse constraints
+        [A3, b3] = ellipseLimsRows(ropeLen, ellipses, x, y, theta, phi, extraDistanceEllipses, nSlackVars);
+        
+        
+        A_tmp = [A1;A2;A3];
+        %                              xuxX             uxX      uxXuxX
+        A_tmp2 = [zeros(size(A_tmp,1), 8+(i-1)*secLen), A_tmp, zeros(size(A_tmp,1), secLen*(N-i))];
+        A = [A; A_tmp2];
+        b = [b;b1;b2;b3];
         
         if N - i < n_final
             % final state/input constraint
@@ -330,12 +334,12 @@ function [ARows, bRows] = rectLimsRows(rectConstraints, ropeLen, thetag, phig, e
               [ zeros(4,10), -eye(4), zeros(4,max(0, nSlackVars-4)) ] ];
     offset = [ - ax * DRect(1,1) - ay * DRect(1,2);
                - ax * DRect(2,1) - ay * DRect(2,2) ];
-    bRows = [ - extraDistRect * ones(4,1);
-              - chRect; 
-              - chRect - offset; 
-              - extraDistRect * ones(4,1);
-              clRect;
-              clRect + offset ];
+    bRows = [ chRect - extraDistRect * ones(2,1); 
+              chRect + offset - extraDistRect * ones(2,1); 
+              zeros(4,1);
+              - clRect - extraDistRect * ones(2,1);
+              - clRect - offset - extraDistRect * ones(2,1);
+              zeros(4,1) ];
 end
 
 function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phig, extraDistance, nSlackVars)
@@ -355,8 +359,8 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
     [~,indexesCart] = sort(ellVals, 'ascend'); % indexes in order of most active due to cart
     [~,indexesObj] = sort(ellObjVals, 'ascend'); % indexes in order of most active due to object
     
-    ARows = zeros(length(ellList)*2,10+nSlackVars);
-    bRows = zeros(length(ellList)*2,1);
+    ARows = zeros(0,10+nSlackVars);
+    bRows = zeros(0,1);
     
     ellipseSlackVars = nSlackVars - 4;
     
@@ -385,8 +389,9 @@ function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDistance, el
     slackVars(:, 2*ellIndex-1) = -1;
     ARow = [ ARow, slackVars ];
     ARow = [ ARow; [zeros(1, 14), slackVars] ];
-    bRow = [ 0;
-             - (alpha - beta * xg - gamma * yg - extraDistance) ];
+    bRow = [ - extraDistance + alpha - beta * xg - gamma * yg;
+             0 ];
+%     bRow = alpha - beta * xg - gamma * yg;
 end
 
 function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b, extraDistance, ellSlackVars, ellIndex)
@@ -404,8 +409,8 @@ function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc
     slackVars(2*ellIndex) = -1;
     ARow = [ ARow, slackVars ];
     ARow = [ ARow; [zeros(1, 14), slackVars] ];
-    bRow = [ 0;
-             - (alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay - extraDistance) ];
+    bRow = [ - extraDistance + alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay;
+             0 ];
 end
 
 function [ARows, bRows] = finalRows(r, tolerancesState, tolerancesInput, i, N, nSlackVars)
