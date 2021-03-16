@@ -13,9 +13,10 @@ param.Wmax = shape.Wmax;
 param.Ts = 0.1; % set sampling period
 param.TsFactor = 5; % set sampling frequency reduction factor for initial non-linear optimisation
 param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
+param.optimiseEvery = 3;
 
-param.extraDistanceEllipses = 0.1;
-param.extraDistanceRectangles = 0.1;
+param.extraDistanceEllipses = 0.01;
+param.extraDistanceRectangles = 0.01;
 n_ellipses = size(param.constraints.ellipses, 1) * size(param.constraints.ellipses, 2);
 param.nSlackVars = 4 + 2*min(2, n_ellipses);
 
@@ -97,6 +98,32 @@ function u = myMPController(r, x_hat, param)
 u = zeros(2,1);
 %
 
+% keep track of when to run optimisation and when just use previous results
+persistent reoptimiseCount
+if isempty(reoptimiseCount)
+    reoptimiseCount = 1;
+else
+    if reoptimiseCount < param.optimiseEvery
+        reoptimiseCount = reoptimiseCount + 1;
+    else 
+        reoptimiseCount = 1;
+    end
+end
+
+% keep track of index of current iteration
+persistent iter
+if isempty(iter)
+    iter = 0;
+else
+    iter = iter + 1;
+end
+
+% declare persisten variables 
+persistent prevW
+persistent save_u
+
+
+if reoptimiseCount == 1
 % horizon length (prediction AND control)
 N = param.N;
 
@@ -113,19 +140,11 @@ N = param.N;
 % number of slack variables for soft constraints
 nSlackVars = param.nSlackVars;
 
-persistent iter
-if isempty(iter)
-    iter = 0;
-else
-    iter = iter + 1;
-end
-
 secLen = 10 + nSlackVars;
 w0 = [param.wref(iter*secLen+1:iter*secLen+8); % x
       param.wref((iter+1)*secLen-1:(iter+N)*secLen+8+nSlackVars)]; % uxXuxXuxXuxXuxX
 % w0 = xuxXuxXuxXuxXuxX
 
-persistent prevW
 % wref = % xXuxXu...xXuxX
 if isempty(prevW)
     start = (iter+1)*secLen+9+nSlackVars; % start of u
@@ -134,9 +153,9 @@ if isempty(prevW)
 else
     piece1 = x_hat(1:8); % 
     % prevW = xuxXuxXuxXuxXuxX
-    piece2 = prevW(19+nSlackVars:end); % uxXuxXuxXuxXuxX
+    piece2 = prevW(9+secLen*param.optimiseEvery:end); % uxXuxXuxXuxXuxX
     start = (iter+N+1)*secLen-1; % start of u
-    fin   = (iter+N+1)*secLen+8+nSlackVars; % end of X 
+    fin   = (iter+N+1)*secLen+8+nSlackVars+(param.optimiseEvery-1)*secLen; % end of X 
     piece3 = param.wref(start:fin); % uxXuxXuxXuxXuxX
     refTraj = [piece1; piece2; piece3]; % xuxXuxXuxXuxXuxX
 end
@@ -168,7 +187,7 @@ Aeq = sparse(Aeq);
 xPen = 1;
 uPen = 0.001;
 lambdaPen = 1000000;
-penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); zeros(4,1); lambdaPen * ones(nSlackVars-4,1) ];  %uxX
+penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1) ];  %uxX
 penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];  % xuxXuxXuxXuxX
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 H = diag(penalties);
@@ -192,7 +211,14 @@ w = quadprog(H,f,A,b,Aeq,beq);
 prevW = w;
 
 % extract u from w
-u = w(9:10);
+save_u = [];
+for oC=1:param.optimiseEvery
+save_u = [save_u, w(9+(oC-1)*secLen:10+(oC-1)*secLen)];
+end
+
+end
+
+u = save_u(:, reoptimiseCount);
 
 end % End of myMPController
 
@@ -275,10 +301,11 @@ end
 
 function out = linePars(a,b) 
     if a(1) == b(1)
-    out = [-1, 0, -a(1)];
+    out = [-1, 0, -a(1)]; % -x + 0y = -x_a
     else
-    tmp = polyfit([a(1) b(1)],[a(2) b(2)],1);
-    out = [-tmp(1) 1 tmp(2)];
+    tmp = polyfit([a(1) b(1)],[a(2) b(2)],1); % tmp = [a b]  where y=ax+b
+    out = [-tmp(1) 1 tmp(2)]; %  
+    out = out/(abs(tmp(1))+1);
     end
 end
 
@@ -380,36 +407,42 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
     end 
 end
 
-function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDistance, ellSlackVars, ellIndex)
-    alpha = ellipseEval(xg, yg, xc, yc, a, b);
-    beta = 2 * (xg - xc) / (a^2);
-    gamma = 2 *(yg - yc) / (b^2);
-    ARow = [ 0, 0, -beta, 0, -gamma, 0, 0, 0, 0, 0, 0, 0, 0, 0 ];
+function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDist, ellSlackVars, ellIndex)
+    a_new = a + extraDist;
+    b_new = b + extraDist; % pad around ellipse for robustness
+    alpha = ellipseEval(xg, yg, xc, yc, a_new, b_new);
+    beta = 2 * (xg - xc) / (a_new^2);
+    gamma = 2 *(yg - yc) / (b_new^2);
+    divBy = abs(beta) + abs(gamma);
+    ARow = [ 0, 0, -beta/divBy, 0, -gamma/divBy, 0, 0, 0, 0, 0, 0, 0, 0, 0 ];
     slackVars = zeros(1, ellSlackVars);
     slackVars(:, 2*ellIndex-1) = -1;
     ARow = [ ARow, slackVars ];
     ARow = [ ARow; [zeros(1, 14), slackVars] ];
-    bRow = [ - extraDistance + alpha - beta * xg - gamma * yg;
+    bRow = [ (alpha - beta * xg - gamma * yg)/divBy;
              0 ];
 %     bRow = alpha - beta * xg - gamma * yg;
 end
 
-function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b, extraDistance, ellSlackVars, ellIndex)
+function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b, extraDist, ellSlackVars, ellIndex)
+    a_new = a + extraDist;
+    b_new = b + extraDist; % pad around ellipse for robustness
     xg_p = xg + ropeLen * sin(thetag); 
     yg_p = yg + ropeLen * sin(phig); 
-    alpha = ellipseEval(xg_p, yg_p, xc, yc, a, b);
-    beta =  2 * (xg_p - xc) / (a^2);
-    gamma = 2 * (yg_p - yc) / (b^2);
+    alpha = ellipseEval(xg_p, yg_p, xc, yc, a_new, b_new);
+    beta =  2 * (xg_p - xc) / (a_new^2);
+    gamma = 2 * (yg_p - yc) / (b_new^2);
+    divBy = abs(beta) + abs(gamma);
     ax = ropeLen * (sin(thetag) - thetag*cos(thetag));
     ay = ropeLen * (sin(phig) - phig*cos(phig));
     bx = ropeLen * cos(thetag);
     by = ropeLen * cos(phig);
-    ARow = [ 0, 0, -beta, 0, -gamma, 0, -beta*bx, 0, -gamma*by, 0, 0, 0, 0, 0 ];
+    ARow = [ 0, 0, -beta/divBy, 0, -gamma/divBy, 0, -beta*bx/divBy, 0, -gamma*by/divBy, 0, 0, 0, 0, 0 ];
     slackVars = zeros(1, ellSlackVars);
     slackVars(2*ellIndex) = -1;
     ARow = [ ARow, slackVars ];
     ARow = [ ARow; [zeros(1, 14), slackVars] ];
-    bRow = [ - extraDistance + alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay;
+    bRow = [ (alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay)/divBy;
              0 ];
 end
 

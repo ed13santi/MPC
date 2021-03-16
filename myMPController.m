@@ -5,6 +5,32 @@ function u = myMPController(r, x_hat, param)
 u = zeros(2,1);
 %
 
+% keep track of when to run optimisation and when just use previous results
+persistent reoptimiseCount
+if isempty(reoptimiseCount)
+    reoptimiseCount = 1;
+else
+    if reoptimiseCount < param.optimiseEvery
+        reoptimiseCount = reoptimiseCount + 1;
+    else 
+        reoptimiseCount = 1;
+    end
+end
+
+% keep track of index of current iteration
+persistent iter
+if isempty(iter)
+    iter = 0;
+else
+    iter = iter + 1;
+end
+
+% declare persisten variables 
+persistent prevW
+persistent save_u
+
+
+if reoptimiseCount == 1
 % horizon length (prediction AND control)
 N = param.N;
 
@@ -21,19 +47,11 @@ N = param.N;
 % number of slack variables for soft constraints
 nSlackVars = param.nSlackVars;
 
-persistent iter
-if isempty(iter)
-    iter = 0;
-else
-    iter = iter + 1;
-end
-
 secLen = 10 + nSlackVars;
 w0 = [param.wref(iter*secLen+1:iter*secLen+8); % x
       param.wref((iter+1)*secLen-1:(iter+N)*secLen+8+nSlackVars)]; % uxXuxXuxXuxXuxX
 % w0 = xuxXuxXuxXuxXuxX
 
-persistent prevW
 % wref = % xXuxXu...xXuxX
 if isempty(prevW)
     start = (iter+1)*secLen+9+nSlackVars; % start of u
@@ -42,9 +60,9 @@ if isempty(prevW)
 else
     piece1 = x_hat(1:8); % 
     % prevW = xuxXuxXuxXuxXuxX
-    piece2 = prevW(19+nSlackVars:end); % uxXuxXuxXuxXuxX
+    piece2 = prevW(9+secLen*param.optimiseEvery:end); % uxXuxXuxXuxXuxX
     start = (iter+N+1)*secLen-1; % start of u
-    fin   = (iter+N+1)*secLen+8+nSlackVars; % end of X 
+    fin   = (iter+N+1)*secLen+8+nSlackVars+(param.optimiseEvery-1)*secLen; % end of X 
     piece3 = param.wref(start:fin); % uxXuxXuxXuxXuxX
     refTraj = [piece1; piece2; piece3]; % xuxXuxXuxXuxXuxX
 end
@@ -76,7 +94,7 @@ Aeq = sparse(Aeq);
 xPen = 1;
 uPen = 0.001;
 lambdaPen = 1000000;
-penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); zeros(4,1); lambdaPen * ones(nSlackVars-4,1) ];  %uxX
+penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1) ];  %uxX
 penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];  % xuxXuxXuxXuxX
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 H = diag(penalties);
@@ -100,7 +118,14 @@ w = quadprog(H,f,A,b,Aeq,beq);
 prevW = w;
 
 % extract u from w
-u = w(9:10);
+save_u = [];
+for oC=1:param.optimiseEvery
+save_u = [save_u, w(9+(oC-1)*secLen:10+(oC-1)*secLen)];
+end
+
+end
+
+u = save_u(:, reoptimiseCount);
 
 end % End of myMPController
 
