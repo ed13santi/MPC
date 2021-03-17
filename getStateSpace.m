@@ -1,7 +1,7 @@
 function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, Ts, nSlackVars)
     secLen = 10 + nSlackVars;
     xus = [x0; w0(9:end-8)]; % xuxXuxXuxXuxX
-    Aeq = zeros(8+8*N, length(w0)); 
+    Aeq = zeros(8+8*N, length(w0)+5); 
     beq = zeros(8+8*N, 1);
     
     Aeq(1:8,1:8) = eye(8);

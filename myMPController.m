@@ -99,16 +99,19 @@ lambdaPen = 1000000;
 penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1) ];  %uxX
 penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];  % xuxXuxXuxXuxX
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
+penalties = [penalties; lambdaPen * ones(5,1)];
 H = diag(penalties);
 
 penaltyBlkf = [uPen * ones(2,1); xPen * ones(8,1); zeros(nSlackVars,1) ]; 
 penaltiesf = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlkf) ];
 penaltiesf(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
+penaltiesf = [penaltiesf; zeros(5,1)];
+
 Hf = diag(penaltiesf);
 
 
 %refTraj = param.wref(iter*10+1:(iter+N)*10+8);
-f = - Hf * refTraj;
+f = - Hf * [refTraj; zeros(5,1)];
 % size(H)
 % size(f)
 % size(A)
@@ -117,7 +120,7 @@ f = - Hf * refTraj;
 % size(beq)
 w = quadprog(H,f,A,b,Aeq,beq);
 
-prevW = w;
+prevW = w(1:end-5);
 
 % extract u from w
 save_u = [];

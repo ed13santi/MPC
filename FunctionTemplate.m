@@ -15,8 +15,8 @@ param.TsFactor = 5; % set sampling frequency reduction factor for initial non-li
 param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
 param.optimiseEvery = 3;
 
-param.extraDistanceEllipses = 0.02;
-param.extraDistanceRectangles = 0.02;
+param.extraDistanceEllipses = shape.tolerances.state(1)*1.5;
+param.extraDistanceRectangles = shape.tolerances.state(1)*1.5;
 n_ellipses = size(param.constraints.ellipses, 1) * size(param.constraints.ellipses, 2);
 param.nSlackVars = 4 + 2*min(2, n_ellipses);
 
@@ -192,16 +192,19 @@ lambdaPen = 1000000;
 penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1) ];  %uxX
 penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];  % xuxXuxXuxXuxX
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
+penalties = [penalties; lambdaPen * ones(5,1)];
 H = diag(penalties);
 
 penaltyBlkf = [uPen * ones(2,1); xPen * ones(8,1); zeros(nSlackVars,1) ]; 
 penaltiesf = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlkf) ];
 penaltiesf(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
+penaltiesf = [penaltiesf; zeros(5,1)];
+
 Hf = diag(penaltiesf);
 
 
 %refTraj = param.wref(iter*10+1:(iter+N)*10+8);
-f = - Hf * refTraj;
+f = - Hf * [refTraj; zeros(5,1)];
 % size(H)
 % size(f)
 % size(A)
@@ -210,7 +213,7 @@ f = - Hf * refTraj;
 % size(beq)
 w = quadprog(H,f,A,b,Aeq,beq);
 
-prevW = w;
+prevW = w(1:end-5);
 
 % extract u from w
 save_u = [];
@@ -258,10 +261,10 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
     secLen = 10 + nSlackVars;
 
     if n_final < N + 1
-        A = zeros(0, 8+secLen*N);
+        A = zeros(0, 8+secLen*N+5);
         b = zeros(0, 1);
     else
-        A = [ zeros(4,8), [eye(2); -eye(2)], zeros(4,secLen*N-2) ];
+        A = [ zeros(4,8), [eye(2); -eye(2)], zeros(4,secLen*N-2+5) ];
         b = [ tolInput; tolInput ];
     end
     
@@ -270,6 +273,7 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
         y = w(10+(i-1)*secLen+3);
         theta = w(10+(i-1)*secLen+5);
         phi = w(10+(i-1)*secLen+7);
+        
         
         % input physical limits
         [A1, b1] = physicalLimsWithSlack(nSlackVars);
@@ -281,7 +285,7 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
         
         A_tmp = [A1;A2;A3];
         %                              xuxX             uxX      uxXuxX
-        A_tmp2 = [zeros(size(A_tmp,1), 8+(i-1)*secLen), A_tmp, zeros(size(A_tmp,1), secLen*(N-i))];
+        A_tmp2 = [zeros(size(A_tmp,1), 8+(i-1)*secLen), A_tmp, zeros(size(A_tmp,1), secLen*(N-i)+5)];
         A = [A; A_tmp2];
         b = [b;b1;b2;b3];
         
@@ -299,6 +303,10 @@ function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectC
         A = [A; A_tmp];
         b = [b; b_tmp];
     end
+    
+    % lambda > 0
+    A = [ A; [zeros(5,size(A,2)-5), -eye(5)] ];
+    b = [ b; zeros(5,1) ];
 end
 
 function out = linePars(a,b) 
@@ -450,16 +458,29 @@ end
 
 function [ARows, bRows] = finalRows(r, tolerancesState, tolerancesInput, i, N, nSlackVars)
     segLen = 10 + nSlackVars;
+    
+    slacks = [ -1 0 0 0 0;
+               0 -1 0 0 0;
+               -1 0 0 0 0;
+               0 -1 0 0 0;
+               0 0 -1 0 0;
+               0 0 0 -1 0;
+               0 0 -1 0 0;
+               0 0 0 -1 0];
+    slacksU = [ 0 0 0 0 -1;
+                0 0 0 0 -1];
+               
     if i == N
+        
         %         xuxXuxXuxXu                 x                  X
-        ARows = [ zeros(16, 10+segLen*(i-1)), [eye(8); -eye(8)], zeros(16, nSlackVars) ]; 
+        ARows = [ zeros(16, 10+segLen*(i-1)), [eye(8); -eye(8)], zeros(16, nSlackVars), [slacks;slacks] ]; 
         bRows = [ r + tolerancesState/2;
                   - r + tolerancesState/2 ];
     else
         %          xuxXuxXuxXu                 x                  XuxXuxX
-        ARows1 = [ zeros(16, 10+segLen*(i-1)), [eye(8); -eye(8)], zeros(16, segLen*(N-i)+nSlackVars) ];
+        ARows1 = [ zeros(16, 10+segLen*(i-1)), [eye(8); -eye(8)], zeros(16, segLen*(N-i)+nSlackVars),[slacks;slacks] ];
         %          xuxXuxXuxXuxX                         u                  xXuxX
-        ARows2 = [ zeros(4, 18+nSlackVars+segLen*(i-1)), [eye(2); -eye(2)], zeros(4, segLen*(N-i)-2) ];
+        ARows2 = [ zeros(4, 18+nSlackVars+segLen*(i-1)), [eye(2); -eye(2)], zeros(4, segLen*(N-i)-2),[slacksU;slacksU] ];
         ARows = [ARows1; ARows2];
         
         bRows = [ r + tolerancesState/2;
@@ -476,7 +497,7 @@ end
 function [Aeq, beq] = getStateSpace(x0, w0, genA, genB, der, N, Ts, nSlackVars)
     secLen = 10 + nSlackVars;
     xus = [x0; w0(9:end-8)]; % xuxXuxXuxXuxX
-    Aeq = zeros(8+8*N, length(w0)); 
+    Aeq = zeros(8+8*N, length(w0)+5); 
     beq = zeros(8+8*N, 1);
     
     Aeq(1:8,1:8) = eye(8);
