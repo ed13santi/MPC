@@ -5,6 +5,8 @@ function u = myMPController(r, x_hat, param)
 u = zeros(2,1);
 %
 
+x_hat = x_hat(1:8);
+
 % keep track of when to run optimisation and when just use previous results
 persistent reoptimiseCount
 if isempty(reoptimiseCount)
@@ -48,8 +50,8 @@ N = param.N;
 nSlackVars = param.nSlackVars;
 
 secLen = 10 + nSlackVars;
-w0 = [param.wref(iter*secLen+1:iter*secLen+8); % x
-      param.wref((iter+1)*secLen-1:(iter+N)*secLen+8+nSlackVars)]; % uxXuxXuxXuxXuxX
+% w0 = [param.wref(iter*secLen+1:iter*secLen+8); % x
+%       param.wref((iter+1)*secLen-1:(iter+N)*secLen+8+nSlackVars)]; % uxXuxXuxXuxXuxX
 % w0 = xuxXuxXuxXuxXuxX
 
 % wref = % xXuxXu...xXuxX
@@ -79,10 +81,10 @@ ellConstr = param.constraints.ellipses;
 n_at_equilibrium = max(0, iter - param.Tf / param.Ts + 1 + N);
 extraDistEll = param.extraDistanceEllipses;
 extraDistRect = param.extraDistanceRectangles;
-[A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, w0, n_at_equilibrium, extraDistEll, extraDistRect, nSlackVars);
+[A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, refTraj, n_at_equilibrium, extraDistEll, extraDistRect, nSlackVars);
 
 % linear equality constraints (currently only equality constraint on x0)
-[Aeq, beq] = getStateSpace(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, param.Ts, nSlackVars);
+[Aeq, beq] = getStateSpace(x_hat, refTraj, param.genericA, param.genericB, param.modelDerivative, N, param.Ts, nSlackVars);
 
 % optimisation
 A = sparse(A);
@@ -92,7 +94,7 @@ Aeq = sparse(Aeq);
 % n_blocks = N/param.TsFactor;
 % penalties = [kron(ones(n_blocks,1), penBlock); ones(8,1)];
 xPen = 1;
-uPen = 0.001;
+uPen = 1;
 lambdaPen = 1000000;
 penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1) ];  %uxX
 penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];  % xuxXuxXuxXuxX
