@@ -15,8 +15,8 @@ param.TsFactor = 5; % set sampling frequency reduction factor for initial non-li
 param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
 param.optimiseEvery = 3;
 
-param.extraDistanceEllipses = 0.01;
-param.extraDistanceRectangles = 0.01;
+param.extraDistanceEllipses = shape.tolerances(1)*0.;
+param.extraDistanceRectangles = 0.03;
 n_ellipses = size(param.constraints.ellipses, 1) * size(param.constraints.ellipses, 2);
 param.nSlackVars = 4 + 2*min(2, n_ellipses);
 
@@ -127,7 +127,6 @@ persistent save_u
 
 if reoptimiseCount == 1
 % horizon length (prediction AND control)
-if iter >= 
 N = param.N;
 
 % inital guess w0
@@ -419,8 +418,8 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
 end
 
 function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDist, ellSlackVars, ellIndex)
-    a_new = a + 2*extraDist*abs(a)/(abs(a)+abs(b));
-    b_new = b + 2*extraDist*abs(b)/(abs(a)+abs(b)); % pad around ellipse for robustness
+    a_new = a + extraDist;
+    b_new = b + extraDist; % pad around ellipse for robustness
     alpha = ellipseEval(xg, yg, xc, yc, a_new, b_new);
     beta = 2 * (xg - xc) / (a_new^2);
     gamma = 2 *(yg - yc) / (b_new^2);
@@ -436,8 +435,8 @@ function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDist, ellSla
 end
 
 function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b, extraDist, ellSlackVars, ellIndex)
-    a_new = a + 2*extraDist*abs(a)/(abs(a)+abs(b));
-    b_new = b + 2*extraDist*abs(b)/(abs(a)+abs(b)); % pad around ellipse for robustness
+    a_new = a + extraDist;
+    b_new = b + extraDist; % pad around ellipse for robustness
     xg_p = xg + ropeLen * sin(thetag); 
     yg_p = yg + ropeLen * sin(phig); 
     alpha = ellipseEval(xg_p, yg_p, xc, yc, a_new, b_new);
