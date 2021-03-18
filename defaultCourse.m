@@ -64,7 +64,7 @@ elseif coursenum == 2
     target = [0.45, 0.05];
     
     Wmax = 1;
-    Tf   = 15;
+    Tf   = 5;
     
 elseif coursenum==3
     constraints.rect=[-0.75,-0.75;0.75,-0.75;0.75,0.75;-0.75,0.75]
@@ -96,7 +96,7 @@ elseif coursenum==3
     
     
     Wmax = 1;
-    Tf   = 15;
+    Tf   = 5;
 end
 
 shape.constraints = constraints;

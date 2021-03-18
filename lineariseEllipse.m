@@ -1,6 +1,6 @@
 function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDist, ellSlackVars, ellIndex)
-    a_new = a + extraDist;
-    b_new = b + extraDist; % pad around ellipse for robustness
+    a_new = a + 2*extraDist*abs(a)/(abs(a)+abs(b));
+    b_new = b + 2*extraDist*abs(b)/(abs(a)+abs(b)); % pad around ellipse for robustness
     alpha = ellipseEval(xg, yg, xc, yc, a_new, b_new);
     beta = 2 * (xg - xc) / (a_new^2);
     gamma = 2 *(yg - yc) / (b_new^2);

@@ -15,8 +15,8 @@ param.TsFactor = 5; % set sampling frequency reduction factor for initial non-li
 param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
 param.optimiseEvery = 3;
 
-param.extraDistanceEllipses = shape.tolerances.state(1)*1.5;
-param.extraDistanceRectangles = shape.tolerances.state(1)*1.5;
+param.extraDistanceEllipses = 0.01;
+param.extraDistanceRectangles = 0.01;
 n_ellipses = size(param.constraints.ellipses, 1) * size(param.constraints.ellipses, 2);
 param.nSlackVars = 4 + 2*min(2, n_ellipses);
 
@@ -127,7 +127,7 @@ persistent save_u
 
 if reoptimiseCount == 1
 % horizon length (prediction AND control)
-N = param.N;
+N = max(min(param.N, param.Tf/param.Ts - iter), 5);
 
 % inital guess w0
 % persistent w0
@@ -155,7 +155,7 @@ if isempty(prevW)
 else
     piece1 = x_hat(1:8); % 
     % prevW = xuxXuxXuxXuxXuxX
-    piece2 = prevW(9+secLen*param.optimiseEvery:end); % uxXuxXuxXuxXuxX
+    piece2 = prevW(9+secLen*param.optimiseEvery:8+secLen*N); % uxXuxXuxXuxXuxX
     start = (iter+N+1)*secLen-1; % start of u
     fin   = (iter+N+1)*secLen+8+nSlackVars+(param.optimiseEvery-1)*secLen; % end of X 
     piece3 = param.wref(start:fin); % uxXuxXuxXuxXuxX
@@ -199,7 +199,6 @@ penaltyBlkf = [uPen * ones(2,1); xPen * ones(8,1); zeros(nSlackVars,1) ];
 penaltiesf = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlkf) ];
 penaltiesf(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
 penaltiesf = [penaltiesf; zeros(5,1)];
-
 Hf = diag(penaltiesf);
 
 
@@ -418,8 +417,8 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
 end
 
 function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDist, ellSlackVars, ellIndex)
-    a_new = a + extraDist;
-    b_new = b + extraDist; % pad around ellipse for robustness
+    a_new = a + 2*extraDist*abs(a)/(abs(a)+abs(b));
+    b_new = b + 2*extraDist*abs(b)/(abs(a)+abs(b)); % pad around ellipse for robustness
     alpha = ellipseEval(xg, yg, xc, yc, a_new, b_new);
     beta = 2 * (xg - xc) / (a_new^2);
     gamma = 2 *(yg - yc) / (b_new^2);
@@ -435,8 +434,8 @@ function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDist, ellSla
 end
 
 function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b, extraDist, ellSlackVars, ellIndex)
-    a_new = a + extraDist;
-    b_new = b + extraDist; % pad around ellipse for robustness
+    a_new = a + 2*extraDist*abs(a)/(abs(a)+abs(b));
+    b_new = b + 2*extraDist*abs(b)/(abs(a)+abs(b)); % pad around ellipse for robustness
     xg_p = xg + ropeLen * sin(thetag); 
     yg_p = yg + ropeLen * sin(phig); 
     alpha = ellipseEval(xg_p, yg_p, xc, yc, a_new, b_new);
