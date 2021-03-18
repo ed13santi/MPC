@@ -18,7 +18,7 @@ clear variables
 perturbSize = 0.1;
 
 % The part of the core coursework that is being worked on
-partNum = 5;
+partNum = 6;
 
 % Introduce a second ellipse to the course for part 2
 useSecondEllipse = 1;

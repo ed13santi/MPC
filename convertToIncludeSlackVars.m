@@ -5,3 +5,5 @@ function long = convertToIncludeSlackVars(short, nSlackVars)
     long = reshape(resized, size(resized,1)*size(resized,2), 1); % 00xXuxXuxXuxX
     long = long(3:end); % xXuxXuxXuxX
 end
+
+

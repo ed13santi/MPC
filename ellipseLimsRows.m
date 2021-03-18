@@ -7,13 +7,13 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
             ell = ellipses{j,z};
             ellList = [ ellList; ell ];
             % build list of the values of ellipseEval for cart
-            ellVals = [ ellVals; ellipseEval(xg, yg, ell.xc, ell.yc, ell.a, ell.b) ];
+            ellVals = [ ellVals; distanceToEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b) ];
             % build list of the values of ellipseEval for object
-            ellObjVals = [ ellObjVals; ellipseEval(xg+ropeLen*sin(thetag), yg+ropeLen*sin(phig), ell.xc, ell.yc, ell.a, ell.b) ];
+            ellObjVals = [ ellObjVals; distanceToEllipse(xg+ropeLen*sin(thetag), yg+ropeLen*sin(phig), ell.xc, ell.yc, ell.a, ell.b) ];
         end
     end
-    [~,indexesCart] = sort(ellVals, 'ascend'); % indexes in order of most active due to cart
-    [~,indexesObj] = sort(ellObjVals, 'ascend'); % indexes in order of most active due to object
+    [~,indexesCart] = sort(ellVals, 'ascend'); % indexes from closest to cart
+    [~,indexesObj] = sort(ellObjVals, 'ascend'); % indexes from closest to object
     
     ARows = zeros(0,10+nSlackVars);
     bRows = zeros(0,1);

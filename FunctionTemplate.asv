@@ -12,12 +12,14 @@ param.Wmax = shape.Wmax;
 
 param.Ts = 0.1; % set sampling period
 param.TsFactor = 5; % set sampling frequency reduction factor for initial non-linear optimisation
-param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
+param.Tf = shape.Tf - param.Ts; % set Tf to be slightly less than required
+N_initial = ceil(param.Tf / (param.Ts * param.TsFactor));
+param.Ts = param.Tf / (N_initial * param.TsFactor);
 param.optimiseEvery = 1;
 param.nInitialOpimisations = 1;
 
-param.extraDistanceEllipses = 0.01;
-param.extraDistanceRectangles = 0.01;
+param.extraDistanceEllipses = 0.001;
+param.extraDistanceRectangles = 0.001;
 n_ellipses = size(param.constraints.ellipses, 1) * size(param.constraints.ellipses, 2);
 param.nSlackVars = 4 + 2*min(2, n_ellipses);
 
@@ -41,13 +43,13 @@ param.craneParams = load('Crane_NominalParameters.mat');
 
 %Run initial optimisation over whole length of episode using fully
 %non-linear model
-param.w_guess = runInitialOptimisation(targetState, initialState, param, param.TsFactor);
+param.w_guess = runInitialOptimisation(targetState, initialState, param, param.TsFactor, N_initial);
 % convert to xXuxXu...xXuxX format
 param.w_guess = convertToIncludeSlackVars(param.w_guess, param.nSlackVars);
 
 segLen = 10+param.nSlackVars;
 simulationLength = 20;
-extraCopies = simulationLength / param.Ts + param.N - (length(param.w_guess) - segLen + 2)/segLen + param.TsFactor;
+extraCopies = ceil(simulationLength / param.Ts) + param.N - (length(param.w_guess) - segLen + 2)/segLen + param.TsFactor;
 blk = [0;0;param.w_guess(end-7-param.nSlackVars:end-param.nSlackVars);zeros(param.nSlackVars,1)]; % uxX
 repBlk = kron(ones(extraCopies,1), blk); % uxXuxXuxXuxXuxXuxXuxX
 param.wref = [ param.w_guess; repBlk ]; % xXuxXu...xXuxX
@@ -187,20 +189,21 @@ Aeq = sparse(Aeq);
 % penBlock = [ones(10,1); zeros(10*(param.TsFactor-1),1)];
 % n_blocks = N/param.TsFactor;
 % penalties = [kron(ones(n_blocks,1), penBlock); ones(8,1)];
-xPen = 0.001;
+xPen = 1;
 uPen = 1;
-lambdaPen = 1e3;
+lambdaPen = 1e6;
 finLambdaPen = 1e6;
 penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1) ];  %uxX
 penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];  % xuxXuxXuxXuxX
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
-penalties(end
+%penalties(end-nSlackVars-7:end-nSlackVars) = lambdaPen * ones(8,1);
 penalties = [penalties; finLambdaPen * ones(5,1)];
 H = diag(penalties);
 
 penaltyBlkf = [uPen * ones(2,1); xPen * ones(8,1); zeros(nSlackVars,1) ]; 
 penaltiesf = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlkf) ];
 penaltiesf(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
+%penaltiesf(end-nSlackVars-7:end-nSlackVars) = lambdaPen * ones(8,1);
 penaltiesf = [penaltiesf; zeros(5,1)];
 
 Hf = diag(penaltiesf);
@@ -214,6 +217,7 @@ f = - Hf * [refTraj; zeros(5,1)];
 % size(b)
 % size(Aeq)
 % size(beq)
+H = sparse(H);
 w = quadprog(H,f,A,b,Aeq,beq);
 
 prevW = w(1:end-5);
@@ -397,13 +401,13 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
             ell = ellipses{j,z};
             ellList = [ ellList; ell ];
             % build list of the values of ellipseEval for cart
-            ellVals = [ ellVals; ellipseEval(xg, yg, ell.xc, ell.yc, ell.a, ell.b) ];
+            ellVals = [ ellVals; distanceToEllipse(xg, yg, ell.xc, ell.yc, ell.a, ell.b) ];
             % build list of the values of ellipseEval for object
-            ellObjVals = [ ellObjVals; ellipseEval(xg+ropeLen*sin(thetag), yg+ropeLen*sin(phig), ell.xc, ell.yc, ell.a, ell.b) ];
+            ellObjVals = [ ellObjVals; distanceToEllipse(xg+ropeLen*sin(thetag), yg+ropeLen*sin(phig), ell.xc, ell.yc, ell.a, ell.b) ];
         end
     end
-    [~,indexesCart] = sort(ellVals, 'ascend'); % indexes in order of most active due to cart
-    [~,indexesObj] = sort(ellObjVals, 'ascend'); % indexes in order of most active due to object
+    [~,indexesCart] = sort(ellVals, 'ascend'); % indexes from closest to cart
+    [~,indexesObj] = sort(ellObjVals, 'ascend'); % indexes from closest to object
     
     ARows = zeros(0,10+nSlackVars);
     bRows = zeros(0,1);
@@ -701,11 +705,10 @@ function out = objFuncInitialGuess(w, N)
     out = sum(maxed);
 end
 
-function w = runInitialOptimisation(finalTrgt, x_hat, param, factorTs)
+function w = runInitialOptimisation(finalTrgt, x_hat, param, factorTs, N)
 
 % horizon length (prediction AND control)
 Ts = param.Ts * factorTs; % initial guess to uses longer Ts to reduce set-up time
-N = param.Tf / Ts;
 
 % find approximate path (no inputs)
 % xs = findPath(finalTrgt, x_hat, N, param);
@@ -1046,4 +1049,11 @@ function long = convertToIncludeSlackVars(short, nSlackVars)
     resized = [resized; zeros(nSlackVars, size(resized,2))]; % 00xX uxX uxX uxX
     long = reshape(resized, size(resized,1)*size(resized,2), 1); % 00xXuxXuxXuxX
     long = long(3:end); % xXuxXuxXuxX
+end
+
+
+function dist = distanceToEllipse(x,y,xc,yc,a,b)
+    beta = 1 / (((x-xc)/a)^2 + ((y-yc)/b)^2);
+    distToCentre = sqrt((x-xc)^2 + (y-yc)^2);
+    dist = distToCentre * (1-sqrt(beta)); 
 end
