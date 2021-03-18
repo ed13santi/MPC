@@ -217,6 +217,7 @@ f = - Hf * [refTraj; zeros(5,1)];
 % size(b)
 % size(Aeq)
 % size(beq)
+H = sparse(H);
 w = quadprog(H,f,A,b,Aeq,beq);
 
 prevW = w(1:end-5);

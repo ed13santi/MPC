@@ -108,6 +108,7 @@ fprintf('Setup time: %fs\n', setupTime );
 
 
 %% Extract the user-defined sampling time, if there is one
+simTimeStart = tic;
 if( isfield( param, 'Ts' ) )
     Ts = param.Ts;
     Fs = 1/Ts;
@@ -192,6 +193,8 @@ for t=0:Ts:T
 end
 
 close(hw);
+
+RunSimulationTime = toc(simTimeStart)
 
 
 %% Visualize the Course
