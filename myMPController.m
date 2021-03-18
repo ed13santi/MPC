@@ -34,7 +34,7 @@ persistent save_u
 
 if reoptimiseCount == 1
 % horizon length (prediction AND control)
-N = param.N;
+N = max(min(param.N, param.Tf/param.Ts - iter), 5);
 
 % inital guess w0
 % persistent w0
@@ -62,7 +62,7 @@ if isempty(prevW)
 else
     piece1 = x_hat(1:8); % 
     % prevW = xuxXuxXuxXuxXuxX
-    piece2 = prevW(9+secLen*param.optimiseEvery:end); % uxXuxXuxXuxXuxX
+    piece2 = prevW(9+secLen*param.optimiseEvery:8+secLen*N); % uxXuxXuxXuxXuxX
     start = (iter+N+1)*secLen-1; % start of u
     fin   = (iter+N+1)*secLen+8+nSlackVars+(param.optimiseEvery-1)*secLen; % end of X 
     piece3 = param.wref(start:fin); % uxXuxXuxXuxXuxX
