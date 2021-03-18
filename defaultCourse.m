@@ -150,7 +150,27 @@ elseif coursenum==4
     start=[0.4, 0.35];
     target=[-0.45, -0.3];
     Wmax = 0.75;
-    Tf   = 3.76;
+    Tf   = 4.98;
+    
+elseif coursenum == 5
+    constraints.rect=[-0.75,-0.75;-0.15,-0.75;-0.15,-0.15;-0.75,-0.15]
+
+    ellipse0.xc=-0.5;
+    ellipse0.yc=-0.6;
+    ellipse0.a=0.15;
+    ellipse0.b=0.15;
+
+    ellipse1.xc=-0.5;
+    ellipse1.yc=-0.2;
+    ellipse1.a=0.15;
+    ellipse1.b=0.15;
+    constraints.ellipses={ellipse0,ellipse1};
+    penalties = [-1, -1, -1, -1, -1, -1];
+    start=[-0.7, -0.7];
+    target=[-0.3, -0.7];
+   
+    Wmax = 0.3;
+    Tf   = 10;
 end
 
 shape.constraints = constraints;

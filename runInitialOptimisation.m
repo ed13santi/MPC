@@ -1,8 +1,7 @@
-function w = runInitialOptimisation(finalTrgt, x_hat, param, factorTs)
+function w = runInitialOptimisation(finalTrgt, x_hat, param, factorTs, N)
 
 % horizon length (prediction AND control)
 Ts = param.Ts * factorTs; % initial guess to uses longer Ts to reduce set-up time
-N = param.Tf / Ts;
 
 % find approximate path (no inputs)
 % xs = findPath(finalTrgt, x_hat, N, param);

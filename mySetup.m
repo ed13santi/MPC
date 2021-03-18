@@ -12,7 +12,9 @@ param.Wmax = shape.Wmax;
 
 param.Ts = 0.1; % set sampling period
 param.TsFactor = 5; % set sampling frequency reduction factor for initial non-linear optimisation
-param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
+param.Tf = shape.Tf - param.Ts; % set Tf to be slightly less than required
+N_initial = ceil(param.Tf / (param.Ts * param.TsFactor));
+param.Ts = param.Tf / (N_initial * param.TsFactor);
 param.optimiseEvery = 1;
 param.nInitialOpimisations = 1;
 
@@ -41,13 +43,13 @@ param.craneParams = load('Crane_NominalParameters.mat');
 
 %Run initial optimisation over whole length of episode using fully
 %non-linear model
-param.w_guess = runInitialOptimisation(targetState, initialState, param, param.TsFactor);
+param.w_guess = runInitialOptimisation(targetState, initialState, param, param.TsFactor, N_initial);
 % convert to xXuxXu...xXuxX format
 param.w_guess = convertToIncludeSlackVars(param.w_guess, param.nSlackVars);
 
 segLen = 10+param.nSlackVars;
 simulationLength = 20;
-extraCopies = simulationLength / param.Ts + param.N - (length(param.w_guess) - segLen + 2)/segLen + param.TsFactor;
+extraCopies = ceil(simulationLength / param.Ts) + param.N - (length(param.w_guess) - segLen + 2)/segLen + param.TsFactor;
 blk = [0;0;param.w_guess(end-7-param.nSlackVars:end-param.nSlackVars);zeros(param.nSlackVars,1)]; % uxX
 repBlk = kron(ones(extraCopies,1), blk); % uxXuxXuxXuxXuxXuxXuxX
 param.wref = [ param.w_guess; repBlk ]; % xXuxXu...xXuxX
