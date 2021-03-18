@@ -16,7 +16,7 @@ param.Tf = shape.Tf - param.Ts; % set Tf to be slightly less than required
 N_initial = ceil(param.Tf / (param.Ts * param.TsFactor));
 param.Ts = param.Tf / (N_initial * param.TsFactor);
 param.optimiseEvery = 1;
-param.nInitialOpimisations = 1;
+param.nInitialOpimisations = 2;
 
 param.extraDistanceEllipses = 0.001;
 param.extraDistanceRectangles = 0.001;

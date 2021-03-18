@@ -16,7 +16,7 @@ param.Tf = shape.Tf - param.Ts; % set Tf to be slightly less than required
 N_initial = ceil(param.Tf / (param.Ts * param.TsFactor));
 param.Ts = param.Tf / (N_initial * param.TsFactor);
 param.optimiseEvery = 1;
-param.nInitialOpimisations = 1;
+param.nInitialOpimisations = 2;
 
 param.extraDistanceEllipses = 0.001;
 param.extraDistanceRectangles = 0.001;
@@ -726,25 +726,25 @@ scatter(xs(1,:),xs(2,:));
 % initial guess w0
 w0 = plannedPath2wrefInitial(xs);
 
-% objective function (w contains N+1 x vectors and N u vectors)
-objFunc = @(w) objFuncPath(w, w0, N);
-
-% linear inequality constraint
-[A, b] = inequalityConstraintsInitialGuess(N, param.craneParams.r, param.constraints.rect, finalTrgt, param.tolerances.state(1:8), param.tolerances.input(1:2));
-
-% linear equality constraints (currently only equality constraint on x0)
-[Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, Ts, finalTrgt);
-
-% non-linear constraints
-nonlcon = @(w) nonLinearConstraints(param.constraints.rect, param.craneParams.r, true, param.constraints.ellipses, param.modelDerivative, Ts, w);
-
-% options
-options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);
-
-% optimisation
-A = sparse(A);
-Aeq = sparse(Aeq);
-w0 = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
+% % objective function (w contains N+1 x vectors and N u vectors)
+% objFunc = @(w) objFuncPath(w, w0, N);
+% 
+% % linear inequality constraint
+% [A, b] = inequalityConstraintsInitialGuess(N, param.craneParams.r, param.constraints.rect, finalTrgt, param.tolerances.state(1:8), param.tolerances.input(1:2));
+% 
+% % linear equality constraints (currently only equality constraint on x0)
+% [Aeq, beq] = linearEqConstrInitialGuess(x_hat, w0, param.genericA, param.genericB, param.modelDerivative, N, Ts, finalTrgt);
+% 
+% % non-linear constraints
+% nonlcon = @(w) nonLinearConstraints(param.constraints.rect, param.craneParams.r, true, param.constraints.ellipses, param.modelDerivative, Ts, w);
+% 
+% % options
+% options = optimoptions(@fmincon);%,'MaxFunctionEvaluations', 15000, 'MaxIterations', 10000);
+% 
+% % optimisation
+% A = sparse(A);
+% Aeq = sparse(Aeq);
+% w0 = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
     
     
 % w0 = [x_hat; zeros(10*N, 1)];
