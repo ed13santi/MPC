@@ -13,10 +13,11 @@ param.Wmax = shape.Wmax;
 param.Ts = 0.1; % set sampling period
 param.TsFactor = 5; % set sampling frequency reduction factor for initial non-linear optimisation
 param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
-param.optimiseEvery = 3;
+param.optimiseEvery = 1;
+param.nInitialOpimisations = 1;
 
-param.extraDistanceEllipses = 0.01;
-param.extraDistanceRectangles = 0.01;
+param.extraDistanceEllipses = 0.001;
+param.extraDistanceRectangles = 0.001;
 n_ellipses = size(param.constraints.ellipses, 1) * size(param.constraints.ellipses, 2);
 param.nSlackVars = 4 + 2*min(2, n_ellipses);
 
@@ -188,16 +189,19 @@ Aeq = sparse(Aeq);
 % penalties = [kron(ones(n_blocks,1), penBlock); ones(8,1)];
 xPen = 1;
 uPen = 1;
-lambdaPen = 1000000;
+lambdaPen = 1e6;
+finLambdaPen = 1e6;
 penaltyBlk = [uPen * ones(2,1); xPen * ones(8,1); lambdaPen * ones(nSlackVars,1) ];  %uxX
 penalties = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlk) ];  % xuxXuxXuxXuxX
 penalties(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
-penalties = [penalties; lambdaPen * ones(5,1)];
+%penalties(end-nSlackVars-7:end-nSlackVars) = lambdaPen * ones(8,1);
+penalties = [penalties; finLambdaPen * ones(5,1)];
 H = diag(penalties);
 
 penaltyBlkf = [uPen * ones(2,1); xPen * ones(8,1); zeros(nSlackVars,1) ]; 
 penaltiesf = [ xPen * ones(8,1); kron(ones(N,1), penaltyBlkf) ];
 penaltiesf(end-7-nSlackVars:end-nSlackVars) = 10 * xPen * ones(8,1);
+%penaltiesf(end-nSlackVars-7:end-nSlackVars) = lambdaPen * ones(8,1);
 penaltiesf = [penaltiesf; zeros(5,1)];
 
 Hf = diag(penaltiesf);
@@ -365,15 +369,21 @@ function [ARows, bRows] = rectLimsRows(rectConstraints, ropeLen, thetag, phig, e
           0 0 DRect(2,1) 0 DRect(2,2) 0 0             0 0             0; 
           0 0 DRect(1,1) 0 DRect(1,2) 0 bx*DRect(1,1) 0 by*DRect(1,2) 0;
           0 0 DRect(2,1) 0 DRect(2,2) 0 by*DRect(2,1) 0 by*DRect(2,2) 0 ];
-    ARows = [ [ D,           -eye(4), zeros(4,max(0, nSlackVars-4)) ]; 
+    ARows = [ [ D,                    zeros(4,max(0, nSlackVars)) ]; 
+              [ D,           -eye(4), zeros(4,max(0, nSlackVars-4)) ]; 
               [ zeros(4,10), -eye(4), zeros(4,max(0, nSlackVars-4)) ];
+              [ -D,          	      zeros(4,max(0, nSlackVars)) ];
               [ -D,          -eye(4), zeros(4,max(0, nSlackVars-4)) ]; 
               [ zeros(4,10), -eye(4), zeros(4,max(0, nSlackVars-4)) ] ];
     offset = [ - ax * DRect(1,1) - ay * DRect(1,2);
                - ax * DRect(2,1) - ay * DRect(2,2) ];
-    bRows = [ chRect - extraDistRect * ones(2,1); 
+    bRows = [ chRect; 
+              chRect + offset; 
+              chRect - extraDistRect * ones(2,1); 
               chRect + offset - extraDistRect * ones(2,1); 
               zeros(4,1);
+              - clRect;
+              - clRect - offset;
               - clRect - extraDistRect * ones(2,1);
               - clRect - offset - extraDistRect * ones(2,1);
               zeros(4,1) ];
@@ -418,42 +428,65 @@ function [ARows, bRows] = ellipseLimsRows(ropeLen, ellipses, xg, yg, thetag, phi
 end
 
 function [ARow, bRow] = lineariseEllipse(xg, yg, xc, yc, a, b, extraDist, ellSlackVars, ellIndex)
+    % hard 
+    alpha = ellipseEval(xg, yg, xc, yc, a, b);
+    beta = 2 * (xg - xc) / (a^2);
+    gamma = 2 *(yg - yc) / (b^2);
+    ARowH = [ 0, 0, -beta, 0, -gamma, 0, 0, 0, 0, 0, 0, 0, 0, 0 ];
+    slackVars = zeros(1, ellSlackVars);
+    ARowH = [ ARowH, slackVars ];
+    bRowH = alpha - beta * xg - gamma * yg;
+
+    % soft
     a_new = a + 2*extraDist*abs(a)/(abs(a)+abs(b));
     b_new = b + 2*extraDist*abs(b)/(abs(a)+abs(b)); % pad around ellipse for robustness
     alpha = ellipseEval(xg, yg, xc, yc, a_new, b_new);
     beta = 2 * (xg - xc) / (a_new^2);
     gamma = 2 *(yg - yc) / (b_new^2);
     divBy = abs(beta) + abs(gamma);
-    ARow = [ 0, 0, -beta/divBy, 0, -gamma/divBy, 0, 0, 0, 0, 0, 0, 0, 0, 0 ];
-    slackVars = zeros(1, ellSlackVars);
+    ARowS = [ 0, 0, -beta/divBy, 0, -gamma/divBy, 0, 0, 0, 0, 0, 0, 0, 0, 0 ];
     slackVars(:, 2*ellIndex-1) = -1;
-    ARow = [ ARow, slackVars ];
-    ARow = [ ARow; [zeros(1, 14), slackVars] ];
-    bRow = [ (alpha - beta * xg - gamma * yg)/divBy;
-             0 ];
-%     bRow = alpha - beta * xg - gamma * yg;
+    ARowS = [ ARowS, slackVars ];
+    ARowS = [ ARowS; [zeros(1, 14), slackVars] ];
+    bRowS = [ (alpha - beta * xg - gamma * yg)/divBy;
+              0 ];
+         
+    ARow = [ARowH;ARowS];
+    bRow = [bRowH;bRowS];
 end
 
 function [ARow, bRow] = lineariseEllipseObject(ropeLen, xg, yg, thetag, phig, xc, yc, a, b, extraDist, ellSlackVars, ellIndex)
-    a_new = a + 2*extraDist*abs(a)/(abs(a)+abs(b));
-    b_new = b + 2*extraDist*abs(b)/(abs(a)+abs(b)); % pad around ellipse for robustness
+    % hard
     xg_p = xg + ropeLen * sin(thetag); 
     yg_p = yg + ropeLen * sin(phig); 
-    alpha = ellipseEval(xg_p, yg_p, xc, yc, a_new, b_new);
-    beta =  2 * (xg_p - xc) / (a_new^2);
-    gamma = 2 * (yg_p - yc) / (b_new^2);
+    alpha = ellipseEval(xg_p, yg_p, xc, yc, a, b);
+    beta =  2 * (xg_p - xc) / (a^2);
+    gamma = 2 * (yg_p - yc) / (b^2);
     ax = ropeLen * (sin(thetag) - thetag*cos(thetag));
     ay = ropeLen * (sin(phig) - phig*cos(phig));
     bx = ropeLen * cos(thetag);
     by = ropeLen * cos(phig);
-    divBy = abs(beta*(1+bx)) + abs(gamma*(1+by));
-    ARow = [ 0, 0, -beta/divBy, 0, -gamma/divBy, 0, -beta*bx/divBy, 0, -gamma*by/divBy, 0, 0, 0, 0, 0 ];
+    ARowH = [ 0, 0, -beta, 0, -gamma, 0, -beta*bx, 0, -gamma*by, 0, 0, 0, 0, 0 ];
     slackVars = zeros(1, ellSlackVars);
+    ARowH = [ ARowH, slackVars ];
+    bRowH = alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay;
+    
+    % soft
+    a_new = a + 2*extraDist*abs(a)/(abs(a)+abs(b));
+    b_new = b + 2*extraDist*abs(b)/(abs(a)+abs(b)); % pad around ellipse for robustness
+    alpha = ellipseEval(xg_p, yg_p, xc, yc, a_new, b_new);
+    beta =  2 * (xg_p - xc) / (a_new^2);
+    gamma = 2 * (yg_p - yc) / (b_new^2);
+    divBy = abs(beta*(1+bx)) + abs(gamma*(1+by));
+    ARowS = [ 0, 0, -beta/divBy, 0, -gamma/divBy, 0, -beta*bx/divBy, 0, -gamma*by/divBy, 0, 0, 0, 0, 0 ];
     slackVars(2*ellIndex) = -1;
-    ARow = [ ARow, slackVars ];
-    ARow = [ ARow; [zeros(1, 14), slackVars] ];
-    bRow = [ (alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay)/divBy;
+    ARowS = [ ARowS, slackVars ];
+    ARowS = [ ARowS; [zeros(1, 14), slackVars] ];
+    bRowS = [ (alpha - beta * xg_p - gamma * yg_p + beta * ax + gamma * ay)/divBy;
              0 ];
+         
+    ARow = [ARowH;ARowS];
+    bRow = [bRowH;bRowS];
 end
 
 function [ARows, bRows] = finalRows(r, tolerancesState, tolerancesInput, i, N, nSlackVars)
@@ -723,7 +756,7 @@ w0 = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
 % objective function (w contains N+1 x vectors and N u vectors)
 objFunc = @(w) objFuncInitialGuess(w, N);
 
-for relinearisation=1:1 % rerun multiple times using better linearisation
+for relinearisation=1:param.nInitialOpimisations % rerun multiple times using better linearisation
 
     % linear inequality constraint
     [A, b] = inequalityConstraintsInitialGuess(N, param.craneParams.r, param.constraints.rect, finalTrgt, param.tolerances.state(1:8), param.tolerances.input(1:2));

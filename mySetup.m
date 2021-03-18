@@ -13,10 +13,11 @@ param.Wmax = shape.Wmax;
 param.Ts = 0.1; % set sampling period
 param.TsFactor = 5; % set sampling frequency reduction factor for initial non-linear optimisation
 param.Tf = shape.Tf - param.Ts * param.TsFactor; % set Tf to be slightly less than required
-param.optimiseEvery = 3;
+param.optimiseEvery = 1;
+param.nInitialOpimisations = 1;
 
-param.extraDistanceEllipses = 0.01;
-param.extraDistanceRectangles = 0.01;
+param.extraDistanceEllipses = 0.001;
+param.extraDistanceRectangles = 0.001;
 n_ellipses = size(param.constraints.ellipses, 1) * size(param.constraints.ellipses, 2);
 param.nSlackVars = 4 + 2*min(2, n_ellipses);
 

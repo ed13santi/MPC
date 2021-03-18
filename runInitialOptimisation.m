@@ -52,7 +52,7 @@ w0 = fmincon(objFunc,w0,A,b,Aeq,beq,[],[],nonlcon,options);
 % objective function (w contains N+1 x vectors and N u vectors)
 objFunc = @(w) objFuncInitialGuess(w, N);
 
-for relinearisation=1:1 % rerun multiple times using better linearisation
+for relinearisation=1:param.nInitialOpimisations % rerun multiple times using better linearisation
 
     % linear inequality constraint
     [A, b] = inequalityConstraintsInitialGuess(N, param.craneParams.r, param.constraints.rect, finalTrgt, param.tolerances.state(1:8), param.tolerances.input(1:2));
