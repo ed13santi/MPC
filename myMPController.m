@@ -30,6 +30,8 @@ end
 % declare persisten variables 
 persistent prevW
 persistent save_u
+persistent iA
+persistent prevITS
 
 
 if reoptimiseCount == 1
@@ -81,14 +83,12 @@ ellConstr = param.constraints.ellipses;
 n_at_equilibrium = max(0, iter - param.Tf / param.Ts + 1 + N);
 extraDistEll = param.extraDistanceEllipses;
 extraDistRect = param.extraDistanceRectangles;
-[A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, refTraj, n_at_equilibrium, extraDistEll, extraDistRect, nSlackVars);
+[A, b, idxsToShift] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, refTraj, n_at_equilibrium, extraDistEll, extraDistRect, nSlackVars);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = getStateSpace(x_hat, refTraj, param.genericA, param.genericB, param.modelDerivative, N, param.Ts, nSlackVars);
 
 % optimisation
-A = sparse(A);
-Aeq = sparse(Aeq);
 
 % penBlock = [ones(10,1); zeros(10*(param.TsFactor-1),1)];
 % n_blocks = N/param.TsFactor;
@@ -121,8 +121,25 @@ f = - Hf * [refTraj; zeros(5,1)];
 % size(b)
 % size(Aeq)
 % size(beq)
-H = sparse(H);
-w = quadprog(H,f,A,b,Aeq,beq);
+
+% H = sparse(H);
+% A = sparse(A);
+% Aeq = sparse(Aeq);
+
+% opt = mpcInteriorPointOptions;
+% w = mpcInteriorPointSolver(H,f,A,b,Aeq,beq,[refTraj; zeros(5,1)],opt);
+if isempty(iA)
+    iA = false(size(A,1),1);
+end
+if isempty(prevITS)
+    prevITS = [];
+end
+iA = [iA(prevITS); false(size(A,1)-length(prevITS),1)];
+prevITS = idxsToShift;
+opt = mpcActiveSetOptions;
+[w,~,iA,~] = mpcActiveSetSolver(H,f,A,b,Aeq,beq,iA,opt);
+% opt = optimoptions('quadprog','Algorithm','active-set');
+% w = quadprog(H,f,A,b,Aeq,beq,[],[],[refTraj; zeros(5,1)],opt);
 
 prevW = w(1:end-5);
 
