@@ -126,8 +126,6 @@ end
 % declare persisten variables 
 persistent prevW
 persistent save_u
-persistent iA
-persistent prevITS
 
 
 if reoptimiseCount == 1
@@ -179,12 +177,14 @@ ellConstr = param.constraints.ellipses;
 n_at_equilibrium = max(0, iter - param.Tf / param.Ts + 1 + N);
 extraDistEll = param.extraDistanceEllipses;
 extraDistRect = param.extraDistanceRectangles;
-[A, b, idxsToShift] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, refTraj, n_at_equilibrium, extraDistEll, extraDistRect, nSlackVars);
+[A, b] = inequalityConstraints(N, r, stateTol, inputTol, ropeLen, rectConstr, ellConstr, refTraj, n_at_equilibrium, extraDistEll, extraDistRect, nSlackVars);
 
 % linear equality constraints (currently only equality constraint on x0)
 [Aeq, beq] = getStateSpace(x_hat, refTraj, param.genericA, param.genericB, param.modelDerivative, N, param.Ts, nSlackVars);
 
 % optimisation
+A = sparse(A);
+Aeq = sparse(Aeq);
 
 % penBlock = [ones(10,1); zeros(10*(param.TsFactor-1),1)];
 % n_blocks = N/param.TsFactor;
@@ -217,25 +217,8 @@ f = - Hf * [refTraj; zeros(5,1)];
 % size(b)
 % size(Aeq)
 % size(beq)
-
-% H = sparse(H);
-% A = sparse(A);
-% Aeq = sparse(Aeq);
-
-% opt = mpcInteriorPointOptions;
-% w = mpcInteriorPointSolver(H,f,A,b,Aeq,beq,[refTraj; zeros(5,1)],opt);
-if isempty(iA)
-    iA = false(size(A,1),1);
-end
-if isempty(prevITS)
-    prevITS = [];
-end
-iA = [iA(prevITS); false(size(A,1)-length(prevITS),1)];
-prevITS = idxsToShift;
-opt = mpcActiveSetOptions;
-[w,~,iA,~] = mpcActiveSetSolver(H,f,A,b,Aeq,beq,iA,opt);
-% opt = optimoptions('quadprog','Algorithm','active-set');
-% w = quadprog(H,f,A,b,Aeq,beq,[],[],[refTraj; zeros(5,1)],opt);
+H = sparse(H);
+w = quadprog(H,f,A,b,Aeq,beq);
 
 prevW = w(1:end-5);
 
@@ -281,12 +264,8 @@ end
 
 
 %% linear inequality constraints
-
-
-function [A, b, indexesToShift] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectConstraints, ellipses, w, n_final, extraDistanceEllipses, extraDistRect, nSlackVars)
+function [A, b] = inequalityConstraints(N, r, tolState, tolInput, ropeLen, rectConstraints, ellipses, w, n_final, extraDistanceEllipses, extraDistRect, nSlackVars)
     secLen = 10 + nSlackVars;
-    
-    indexesToShift = [];
 
     if n_final < N + 1
         A = zeros(0, 8+secLen*N+5);
@@ -310,36 +289,27 @@ function [A, b, indexesToShift] = inequalityConstraints(N, r, tolState, tolInput
         % ellipse constraints
         [A3, b3] = ellipseLimsRows(ropeLen, ellipses, x, y, theta, phi, extraDistanceEllipses, nSlackVars);
         
+        
         A_tmp = [A1;A2;A3];
         %                              xuxX             uxX      uxXuxX
         A_tmp2 = [zeros(size(A_tmp,1), 8+(i-1)*secLen), A_tmp, zeros(size(A_tmp,1), secLen*(N-i)+5)];
         A = [A; A_tmp2];
         b = [b;b1;b2;b3];
         
-        if i>=2
-            indexesToShift = [indexesToShift, size(A,1)+1-size(A_tmp2,1):size(A,1)];
-        end
-        
         if N - i < n_final
             % final state/input constraint
             [A4, b4] = finalRows(r, tolState, tolInput, i, N, nSlackVars);
             A = [A; A4];
             b = [b; b4];
-            if i == 1
-                indexesToShift = [indexesToShift, size(A,1)-3:size(A,1)];
-            end
-            if i>1
-                indexesToShift = [indexesToShift, size(A,1)+1-size(A4,1):size(A,1)];
-            end
         end
     end
     
-%     if n_final > 0
-%         % final state/input constraint
-%         [A_tmp, b_tmp] = finalRows(r, tolState, tolInput, N, N, nSlackVars);
-%         A = [A; A_tmp];
-%         b = [b; b_tmp];
-%     end
+    if n_final > 0
+        % final state/input constraint
+        [A_tmp, b_tmp] = finalRows(r, tolState, tolInput, N, N, nSlackVars);
+        A = [A; A_tmp];
+        b = [b; b_tmp];
+    end
     
     % lambda > 0
     A = [ A; [zeros(5,size(A,2)-5), -eye(5)] ];

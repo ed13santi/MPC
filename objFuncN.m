@@ -20,5 +20,3 @@ end
 
 
 %% linear inequality constraints
-
-
